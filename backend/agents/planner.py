@@ -7,7 +7,8 @@ llm = ChatOpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.environ.get("OPENROUTER_API_KEY"),
     model="cohere/north-mini-code:free",
-    temperature=0
+    temperature=0,
+    timeout=45
 )
 
 planner_prompt = ChatPromptTemplate.from_messages([
@@ -46,6 +47,10 @@ def planner_node(state: AgentState):
                 plan_steps.append(line)
                 
         reasoning = f"Created a {len(plan_steps)}-step execution plan to analyze the query."
+        from utils.logger import log_agent_action
+        log_agent_action("Planner", state.get("session_id", "N/A"), "Drafted plan", f"{reasoning} Plan steps: {plan_steps}")
         return {"plan": plan_steps, "reasoning": reasoning}
     except Exception as e:
+        from utils.logger import log_agent_action
+        log_agent_action("Planner", state.get("session_id", "N/A"), "Draft error", str(e))
         return {"error": str(e)}

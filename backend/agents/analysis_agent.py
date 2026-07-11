@@ -73,6 +73,8 @@ def analysis_node(state: AgentState):
             api_key=os.environ.get("OPENROUTER_API_KEY"),
             model="cohere/north-mini-code:free",
             temperature=0,
+            timeout=45,
+            streaming=True
         )
 
         # Step 1: Generate pandas code
@@ -153,6 +155,8 @@ def analysis_node(state: AgentState):
             )
 
         new_reasoning = f"{current_reasoning}\n\nAnalysis Agent: Successfully executed pandas code and generated a conversational reply."
+        from utils.logger import log_agent_action
+        log_agent_action("Pandas Agent", state.get("session_id", "N/A"), "Executed Python code", f"Code: {pandas_code}")
         return {
             "pandas_code": pandas_code,
             "insights":    reply,   # surface in insights tab too
@@ -161,4 +165,6 @@ def analysis_node(state: AgentState):
         }
 
     except Exception as e:
+        from utils.logger import log_agent_action
+        log_agent_action("Pandas Agent", state.get("session_id", "N/A"), "Pandas code error", str(e))
         return {"error": f"Analysis failed: {str(e)}"}

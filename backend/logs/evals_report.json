@@ -1,0 +1,55 @@
+{
+  "timestamp": "2026-07-11 12:40:29",
+  "metrics": {
+    "total_tests": 3,
+    "passed_tests": 0,
+    "pass_rate": 0.0,
+    "avg_latency": 6.71
+  },
+  "test_cases": [
+    {
+      "id": "TC_01",
+      "name": "SQL & Visual Chart - Regional Profits",
+      "query": "Show me total profit by region on a bar chart.",
+      "agent_mode": "auto",
+      "executed_agents": [
+        "sql",
+        "chart",
+        "insight"
+      ],
+      "sql_status": "Failed",
+      "code_status": "N/A",
+      "assertion_status": "Failed",
+      "latency_seconds": 12.04,
+      "error": "SQL generation failed: Error code: 429 - {'error': {'message': 'Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day', 'code': 429, 'metadata': {'headers': {'X-RateLimit-Limit': '50', 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': '1783814400000'}, 'provider_name': None}}, 'user_id': 'user_2xxBjVtDH1hq1NBL6v4pnGzKx9H'}"
+    },
+    {
+      "id": "TC_02",
+      "name": "Pandas Analysis - Average Unit Price",
+      "query": "What is the average unit price for products sold?",
+      "agent_mode": "pandas",
+      "executed_agents": [
+        "pandas"
+      ],
+      "sql_status": "N/A",
+      "code_status": "Failed",
+      "assertion_status": "Failed",
+      "latency_seconds": 3.77,
+      "error": "Analysis failed: Error code: 429 - {'error': {'message': 'Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day', 'code': 429, 'metadata': {'headers': {'X-RateLimit-Limit': '50', 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': '1783814400000'}, 'provider_name': None}}, 'user_id': 'user_2xxBjVtDH1hq1NBL6v4pnGzKx9H'}"
+    },
+    {
+      "id": "TC_03",
+      "name": "Anomaly Detection - Outliers Detection",
+      "query": "Find all sales anomalies using isolation forest.",
+      "agent_mode": "anomaly",
+      "executed_agents": [
+        "anomaly"
+      ],
+      "sql_status": "N/A",
+      "code_status": "Failed",
+      "assertion_status": "Failed",
+      "latency_seconds": 4.31,
+      "error": "Anomaly detection failed: Error code: 429 - {'error': {'message': 'Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day', 'code': 429, 'metadata': {'headers': {'X-RateLimit-Limit': '50', 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': '1783814400000'}, 'provider_name': None}}, 'user_id': 'user_2xxBjVtDH1hq1NBL6v4pnGzKx9H'}"
+    }
+  ]
+}

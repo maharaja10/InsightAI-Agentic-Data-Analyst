@@ -10,7 +10,8 @@ llm = ChatOpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.environ.get("OPENROUTER_API_KEY"),
     model="cohere/north-mini-code:free",
-    temperature=0
+    temperature=0,
+    timeout=45
 )
 
 chart_prompt = ChatPromptTemplate.from_messages([

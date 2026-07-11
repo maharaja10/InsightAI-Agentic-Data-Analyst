@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timedelta
@@ -214,3 +214,102 @@ def get_user_operational_stats(
         "agent_metrics": agent_table_metrics,
         "recent_operations": recent_ops
     }
+
+
+@router.get("/logs/")
+def get_agent_execution_logs(
+    current_user = Depends(get_current_user),
+):
+    """
+    Tails the last 50 lines of the agent execution log file.
+    Protected: requires valid user JWT token.
+    """
+    from utils.logger import LOG_FILE
+    if not os.path.exists(LOG_FILE):
+        return []
+        
+    try:
+        with open(LOG_FILE, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        
+        # Get last 50 lines
+        last_lines = lines[-50:]
+        
+        # Parse into structured objects
+        parsed_logs = []
+        for line in last_lines:
+            line = line.strip()
+            if not line:
+                continue
+            parsed_logs.append(line)
+            
+        return parsed_logs
+    except Exception as e:
+        return [f"Error reading logs: {str(e)}"]
+
+
+def run_evals_background():
+    try:
+        from run_evals import run_evaluations
+        run_evaluations()
+    except Exception as e:
+        print(f"[Evals Background Error] Failed to run evaluations: {str(e)}")
+
+
+@router.post("/evals/run")
+def trigger_evals_suite(
+    background_tasks: BackgroundTasks,
+    current_user = Depends(get_current_user),
+):
+    """
+    Triggers the automated evaluations suite in a background task.
+    """
+    background_tasks.add_task(run_evals_background)
+    return {"message": "Model evaluation suite triggered in the background."}
+
+
+@router.get("/evals/")
+def get_model_evaluation_report(
+    current_user = Depends(get_current_user),
+):
+    """
+    Returns the latest compiled model evaluation JSON report.
+    """
+    import json
+    evals_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs", "evals_report.json")
+    if not os.path.exists(evals_file):
+        # Return default mock metrics to represent system readiness
+        return {
+            "timestamp": "Never executed",
+            "metrics": {
+                "total_tests": 0,
+                "passed_tests": 0,
+                "pass_rate": 0.0,
+                "avg_latency": 0.0
+            },
+            "test_cases": []
+        }
+        
+    try:
+        with open(evals_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read evals report: {str(e)}")
+
+
+@router.post("/cache/clear")
+def clear_query_cache(
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Clears all cached query results for the current user in QueryCache.
+    """
+    from db.models import QueryCache
+    try:
+        db.query(QueryCache).filter(QueryCache.user_id == current_user.id).delete()
+        db.commit()
+        return {"message": "Query cache cleared successfully."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to clear query cache: {str(e)}")

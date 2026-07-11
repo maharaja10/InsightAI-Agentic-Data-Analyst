@@ -76,6 +76,7 @@ export default function ChatWindow({
   const messages = chatHistory[agentMode] || [];
   const [input,     setInput]     = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [progressMessage, setProgressMessage] = useState<string | null>(null);
   const [expandedArtifacts, setExpandedArtifacts] = useState<Record<string, Record<string, boolean>>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLTextAreaElement>(null);
@@ -148,46 +149,136 @@ export default function ChatWindow({
       id: Date.now().toString(), sender: 'user', text: msg,
       agentMode, timestamp: Date.now(),
     };
-    setChatHistory(prev => ({ ...prev, [agentMode]: [...(prev[agentMode] || []), userMsg] }));
+
+    const aiMsgId = (Date.now() + 1).toString();
+    const initAiMsg: Message = {
+      id: aiMsgId, sender: 'ai', text: '',
+      agentMode, timestamp: Date.now(),
+    };
+
+    setChatHistory(prev => ({
+      ...prev,
+      [agentMode]: [...(prev[agentMode] || []), userMsg, initAiMsg]
+    }));
     setInput('');
     setIsLoading(true);
+    setProgressMessage('Supervisor is organizing pipeline...');
 
     try {
-      const response = await axios.post('http://localhost:8000/api/chat/', {
-        message:    msg,
-        session_id: sessionId,
-        files:      activeDatasets,
-        agent_mode: agentMode,
-        history:    messages.slice(-10).map(m => ({ sender: m.sender, text: m.text })),
+      const token = localStorage.getItem('insightai_token');
+      const response = await fetch('http://localhost:8000/api/chat/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          message:    msg,
+          session_id: sessionId,
+          files:      activeDatasets,
+          agent_mode: agentMode,
+          history:    messages.slice(-10).map(m => ({ sender: m.sender, text: m.text })),
+        })
       });
-      const aiMsg: Message = {
-        id:        (Date.now() + 1).toString(),
-        sender:    'ai',
-        text:      response.data.message,
-        chart:     response.data.chart,
-        sql:       response.data.sql,
-        code:      response.data.code,
-        insights:  response.data.insights,
-        reasoning: response.data.reasoning,
-        anomalies: response.data.anomalies,
-        agentMode,
-        timestamp: Date.now(),
-      };
-      setChatHistory(prev => ({ ...prev, [agentMode]: [...(prev[agentMode] || []), aiMsg] }));
+
+      if (!response.body) throw new Error('Response body is null');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      
+      let buffer = '';
+      let replyText = '';
+      
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        
+        // Keep the last incomplete block in the buffer
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6).trim();
+            try {
+              const data = JSON.parse(dataStr);
+              
+              if (data.text !== undefined) {
+                replyText += data.text;
+                setChatHistory(prev => {
+                  const history = prev[agentMode] || [];
+                  const updated = history.map(m => {
+                    if (m.id === aiMsgId) {
+                      return { ...m, text: replyText };
+                    }
+                    return m;
+                  });
+                  return { ...prev, [agentMode]: updated };
+                });
+              } else if (data.step !== undefined) {
+                setProgressMessage(data.message);
+              } else if (data.message !== undefined && data.reasoning !== undefined && data.chart === undefined) {
+                // This matches the error structure
+                setChatHistory(prev => {
+                  const history = prev[agentMode] || [];
+                  const updated = history.map(m => {
+                    if (m.id === aiMsgId) {
+                      return { ...m, text: data.message, reasoning: data.reasoning };
+                    }
+                    return m;
+                  });
+                  return { ...prev, [agentMode]: updated };
+                });
+              } else {
+                // Final result payload
+                setChatHistory(prev => {
+                  const history = prev[agentMode] || [];
+                  const updated = history.map(m => {
+                    if (m.id === aiMsgId) {
+                      return {
+                        ...m,
+                        text:      data.message || replyText || 'Analysis complete.',
+                        chart:     data.chart,
+                        sql:       data.sql,
+                        code:      data.code,
+                        insights:  data.insights,
+                        reasoning: data.reasoning,
+                        anomalies: data.anomalies,
+                      };
+                    }
+                    return m;
+                  });
+                  return { ...prev, [agentMode]: updated };
+                });
+              }
+            } catch (err) {
+              console.error('Error parsing stream line:', line, err);
+            }
+          }
+        }
+      }
     } catch (error: any) {
-      setChatHistory(prev => ({
-        ...prev,
-        [agentMode]: [...(prev[agentMode] || []), {
-          id:        Date.now().toString(),
-          sender:    'ai',
-          text:      'Sorry, I encountered an error processing your request.',
-          reasoning: error.response?.data?.detail || error.message,
-          agentMode,
-          timestamp: Date.now(),
-        }],
-      }));
+      console.error('Streaming failed:', error);
+      setChatHistory(prev => {
+        const history = prev[agentMode] || [];
+        const updated = history.map(m => {
+          if (m.id === aiMsgId) {
+            return {
+              ...m,
+              text: 'Sorry, I encountered an error processing your request.',
+              reasoning: error.message,
+            };
+          }
+          return m;
+        });
+        return { ...prev, [agentMode]: updated };
+      });
     } finally {
       setIsLoading(false);
+      setProgressMessage(null);
     }
   };
 
@@ -266,6 +357,8 @@ export default function ChatWindow({
         {/* Messages list */}
         {messages.map((msg, idx) => {
           const artifacts = buildArtifacts(msg);
+          const hasContent = msg.sender === 'user' || (msg.text && msg.text.trim() !== '') || artifacts.length > 0;
+          if (!hasContent) return null;
           return (
             <div
               key={msg.id}
@@ -286,16 +379,18 @@ export default function ChatWindow({
               </div>
 
               {/* Bubble + artifacts */}
-              <div className={`max-w-[84%] flex flex-col gap-3 ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                <div
-                  className={`px-4 py-3 rounded-2xl text-xs leading-relaxed shadow-sm
-                    ${msg.sender === 'user'
-                      ? 'msg-user text-white rounded-tr-sm'
-                      : 'msg-ai rounded-tl-sm'
-                    }`}
-                >
-                  {msg.sender === 'user' ? msg.text : <Markdown content={msg.text} />}
-                </div>
+              <div className={`max-w-[90%] md:max-w-[85%] ${msg.sender === 'ai' ? 'w-full' : ''} flex flex-col gap-3 ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
+                {msg.text && (
+                  <div
+                    className={`px-4 py-3 rounded-2xl text-xs leading-relaxed shadow-sm
+                      ${msg.sender === 'user'
+                        ? 'msg-user text-white rounded-tr-sm'
+                        : 'msg-ai rounded-tl-sm'
+                      }`}
+                  >
+                    {msg.sender === 'user' ? msg.text : <Markdown content={msg.text} />}
+                  </div>
+                )}
 
                 {/* Artifact blocks */}
                 {msg.sender === 'ai' && artifacts.length > 0 && (
@@ -382,7 +477,9 @@ export default function ChatWindow({
               <Loader2 size={17} className="animate-spin" />
             </div>
             <div className="msg-ai rounded-2xl rounded-tl-sm px-5 py-3.5 shadow-sm flex items-center gap-3">
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Agents are thinking</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                {progressMessage || 'Agents are thinking'}
+              </span>
               <div className="flex gap-1">
                 <span className="typing-dot" />
                 <span className="typing-dot" />

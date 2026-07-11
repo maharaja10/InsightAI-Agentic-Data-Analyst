@@ -71,6 +71,8 @@ def sql_node(state: AgentState):
             api_key=os.environ.get("OPENROUTER_API_KEY"),
             model="cohere/north-mini-code:free",
             temperature=0,
+            timeout=45,
+            streaming=True
         )
 
         # Step 1: Generate SQL
@@ -121,7 +123,11 @@ def sql_node(state: AgentState):
         status = "successfully" if execution_success else "with errors"
         new_reasoning = f"{current_reasoning}\n\nSQL Agent: Formulated and executed SQL query {status}."
 
+        from utils.logger import log_agent_action
+        log_agent_action("SQL Agent", state.get("session_id", "N/A"), f"Executed SQL {status}", f"Query: {sql_query}")
         return {"sql_query": sql_query, "reply": reply, "reasoning": new_reasoning}
 
     except Exception as e:
+        from utils.logger import log_agent_action
+        log_agent_action("SQL Agent", state.get("session_id", "N/A"), "SQL execution error", str(e))
         return {"error": f"SQL generation failed: {str(e)}"}

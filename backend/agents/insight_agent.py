@@ -39,6 +39,8 @@ def insight_node(state: AgentState):
             api_key=os.environ.get("OPENROUTER_API_KEY"),
             model="cohere/north-mini-code:free",
             temperature=0,
+            timeout=45,
+            streaming=True
         )
 
         chain    = insight_prompt | llm
@@ -61,6 +63,8 @@ def insight_node(state: AgentState):
         current_reasoning = state.get("reasoning", "")
         new_reasoning = f"{current_reasoning}\n\nInsight Agent: Generated conversational business insights."
 
+        from utils.logger import log_agent_action
+        log_agent_action("Insight Agent", state.get("session_id", "N/A"), "Generated insights", f"Preview data length: {len(data_preview)} chars")
         return {
             "insights":  content,
             "reply":     content,
@@ -69,6 +73,8 @@ def insight_node(state: AgentState):
 
     except Exception as e:
         current_reasoning = state.get("reasoning", "")
+        from utils.logger import log_agent_action
+        log_agent_action("Insight Agent", state.get("session_id", "N/A"), "Insight analysis error", str(e))
         return {
             "reasoning": f"{current_reasoning}\n\nInsight Agent: Failed ({str(e)}).",
             "insights":  f"I couldn't generate insights due to an error: {str(e)}",

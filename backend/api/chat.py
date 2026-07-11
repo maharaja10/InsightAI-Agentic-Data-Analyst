@@ -6,6 +6,8 @@ import json
 import os
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+import asyncio
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -17,6 +19,97 @@ from db.database import get_db
 from db.models import User, ChatSession, ChatMessage
 
 router = APIRouter()
+
+
+def check_cache(user_id: int, agent_mode: str, active_files: List[str], query_text: str, db: Session) -> Optional[dict]:
+    from db.models import QueryCache
+    import json
+    
+    # Sort files to ensure order-independent list matching
+    sorted_files = sorted(active_files)
+    
+    # Find all cache entries for this user, mode
+    entries = db.query(QueryCache).filter(
+        QueryCache.user_id == user_id,
+        QueryCache.agent_mode == agent_mode
+    ).all()
+    
+    if not entries:
+        return None
+        
+    # Filter entries by the exact list of files
+    matching_entries = []
+    for entry in entries:
+        try:
+            entry_files = json.loads(entry.datasets_json)
+            if sorted(entry_files) == sorted_files:
+                matching_entries.append(entry)
+        except Exception:
+            continue
+            
+    if not matching_entries:
+        return None
+        
+    # 1. Exact Match Check (case-insensitive, whitespace stripped)
+    target_query = query_text.strip().lower()
+    for entry in matching_entries:
+        if entry.query_text.strip().lower() == target_query:
+            try:
+                return json.loads(entry.response_json)
+            except Exception:
+                continue
+            
+    # 2. Semantic Match Check via Scikit-Learn TF-IDF Cosine Similarity
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+        
+        cached_queries = [entry.query_text for entry in matching_entries]
+        all_texts = cached_queries + [query_text]
+        
+        # Use character-level w/word-boundary ngrams for robust semantic/lexical overlap
+        vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 4))
+        tfidf_matrix = vectorizer.fit_transform(all_texts)
+        
+        # Compute cosine similarity between the last document (our query) and all previous ones
+        similarities = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1])[0]
+        
+        best_idx = similarities.argmax()
+        best_score = similarities[best_idx]
+        
+        if best_score >= 0.92:
+            print(f"[Cache] Semantic cache hit! Score: {best_score:.4f} for cached query: '{cached_queries[best_idx]}'")
+            return json.loads(matching_entries[best_idx].response_json)
+    except Exception as e:
+        print("[Cache] Error computing semantic similarity:", str(e))
+        
+    return None
+
+
+def save_cache(user_id: int, agent_mode: str, active_files: List[str], query_text: str, response_payload: dict, db: Session):
+    from db.models import QueryCache
+    import json
+    try:
+        # Avoid duplicate queries
+        existing = db.query(QueryCache).filter(
+            QueryCache.user_id == user_id,
+            QueryCache.agent_mode == agent_mode,
+            QueryCache.query_text == query_text
+        ).first()
+        if existing:
+            return
+            
+        cache_entry = QueryCache(
+            user_id=user_id,
+            query_text=query_text,
+            agent_mode=agent_mode,
+            datasets_json=json.dumps(active_files),
+            response_json=json.dumps(response_payload)
+        )
+        db.add(cache_entry)
+        db.commit()
+    except Exception as e:
+        print("[Cache] Error saving cache entry:", str(e))
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -95,7 +188,7 @@ def _user_file_path(user_id: int, filename: str) -> str:
 
 
 # ── Endpoint ──────────────────────────────────────────────────────────────────
-@router.post("/", response_model=ChatResponse)
+@router.post("/")
 async def chat_endpoint(
     request: ChatRequest,
     current_user: User = Depends(get_current_user),
@@ -120,6 +213,7 @@ async def chat_endpoint(
         agent_mode=request.agent_mode or "auto",
         db=db,
     )
+    db_session_id = db_session.id
 
     # ── 3. Build conversation context from memory ────────────────────────────
     history    = get_message_history(request.session_id, limit=20)
@@ -157,6 +251,8 @@ async def chat_endpoint(
     primary_dataset = active_files[0] if active_files else (user_datasets[0].filename if user_datasets else None)
     file_path = _user_file_path(current_user.id, primary_dataset) if primary_dataset else None
 
+    current_user_id = current_user.id
+
     # Build agent state
     state = {
         "messages":       [HumanMessage(content=final_message)],
@@ -165,99 +261,216 @@ async def chat_endpoint(
         "current_dataset": file_path,
     }
 
-    try:
-        mode         = request.agent_mode
-        response_obj = None
+    # ── 5. Cache Check ───────────────────────────────────────────────────────
+    cached_resp = check_cache(
+        user_id=current_user_id,
+        agent_mode=request.agent_mode or "auto",
+        active_files=active_files,
+        query_text=request.message,
+        db=db
+    )
+    
+    if cached_resp:
+        # Persist cached AI response in session history immediately
+        save_message(request.session_id, "ai", cached_resp["message"])
+        extras = {
+            k: v for k, v in {
+                "chart":     cached_resp.get("chart"),
+                "sql":       cached_resp.get("sql"),
+                "code":      cached_resp.get("code"),
+                "insights":  cached_resp.get("insights"),
+                "anomalies": cached_resp.get("anomalies"),
+            }.items() if v
+        }
+        _save_message(db_session, "ai", cached_resp["message"], request.agent_mode or "auto", extras, db)
 
-        if mode == "sql":
-            from agents.sql_agent import sql_node
-            result = sql_node(state)
-            if "error" in result:
-                raise Exception(result["error"])
-            reply = result.get("reply") or f"SQL query executed for: {request.message.strip()}"
-            response_obj = ChatResponse(
-                message=reply, sql=result.get("sql_query"),
-                reasoning=result.get("reasoning", "SQL Agent."),
-            )
+        async def cached_event_generator():
+            yield "event: progress\ndata: " + json.dumps({"step": "cache", "message": "[Cache Hit] Retrieving saved response..."}) + "\n\n"
+            await asyncio.sleep(0.1)
+            msg_text = cached_resp.get("message") or "Analysis complete."
+            
+            # Stream the cached text in chunks to simulate real-time typing
+            for chunk in [msg_text[i:i+4] for i in range(0, len(msg_text), 4)]:
+                yield "event: token\ndata: " + json.dumps({"text": chunk}) + "\n\n"
+                await asyncio.sleep(0.005)
+                
+            yield "event: result\ndata: " + json.dumps(cached_resp) + "\n\n"
 
-        elif mode == "pandas":
-            from agents.analysis_agent import analysis_node
-            result = analysis_node(state)
-            if "error" in result:
-                raise Exception(result["error"])
-            reply = result.get("reply") or "Python/Pandas code executed."
-            response_obj = ChatResponse(
-                message=reply, code=result.get("pandas_code"),
-                insights=result.get("insights"),
-                reasoning=result.get("reasoning", "Pandas Agent."),
-            )
+        return StreamingResponse(cached_event_generator(), media_type="text/event-stream")
 
-        elif mode == "graph":
-            from agents.chart_agent import chart_node
-            result = chart_node(state)
-            if "error" in result:
-                raise Exception(result["error"])
-            reply = result.get("reply") or "Visualization created."
-            response_obj = ChatResponse(
-                message=reply, chart=result.get("chart_config"),
-                reasoning=result.get("reasoning", "Graph Agent."),
-            )
+    async def event_generator():
+        mode = request.agent_mode
+        final_text = ""
+        final_chart = None
+        final_sql = None
+        final_code = None
+        final_insights = None
+        final_reasoning = ""
+        final_anomalies = None
 
-        elif mode == "anomaly":
-            from agents.anomaly_agent import anomaly_node
-            result = anomaly_node(state)
-            if "error" in result:
-                raise Exception(result["error"])
-            interpretation = result.get("insights", "")
-            reply = interpretation or f"Anomaly detection: {len(result.get('anomalies') or [])} anomalous record(s)."
-            response_obj = ChatResponse(
-                message=reply, anomalies=result.get("anomalies"),
-                insights=interpretation,
-                reasoning=result.get("reasoning", "Anomaly Agent."),
-            )
+        try:
+            if mode == "sql":
+                yield "event: progress\ndata: " + json.dumps({"step": "sql", "message": "SQL Agent: Formulating and executing query..."}) + "\n\n"
+                await asyncio.sleep(0.1)
+                from agents.sql_agent import sql_node
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(None, sql_node, state)
+                if "error" in result:
+                    raise Exception(result["error"])
+                final_text = result.get("reply") or ""
+                final_sql = result.get("sql_query")
+                final_reasoning = result.get("reasoning", "")
 
-        elif mode == "insights":
-            from agents.insight_agent import insight_node
-            state["anomalies"] = []
-            result = insight_node(state)
-            if "error" in result:
-                raise Exception(result["error"])
-            reply = result.get("reply") or result.get("insights") or "Insights generated."
-            response_obj = ChatResponse(
-                message=reply, insights=result.get("insights"),
-                reasoning=result.get("reasoning", "Insight Agent."),
-            )
+            elif mode == "pandas":
+                yield "event: progress\ndata: " + json.dumps({"step": "analysis", "message": "Pandas Agent: Compiling and running code..."}) + "\n\n"
+                await asyncio.sleep(0.1)
+                from agents.analysis_agent import analysis_node
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(None, analysis_node, state)
+                if "error" in result:
+                    raise Exception(result["error"])
+                final_text = result.get("reply") or ""
+                final_code = result.get("pandas_code")
+                final_insights = result.get("insights")
+                final_reasoning = result.get("reasoning", "")
 
-        else:  # auto / general chatbot
-            from agents.general_agent import general_chatbot_node
-            result = general_chatbot_node(state)
-            if "error" in result:
-                raise Exception(result["error"])
-            reply = result.get("reply") or "Analysis complete."
-            response_obj = ChatResponse(
-                message=reply, insights=result.get("insights"),
-                reasoning=result.get("reasoning", "General Agent."),
-            )
+            elif mode == "graph":
+                yield "event: progress\ndata: " + json.dumps({"step": "chart", "message": "Graph Agent: Rendering Plotly visualization..."}) + "\n\n"
+                await asyncio.sleep(0.1)
+                from agents.chart_agent import chart_node
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(None, chart_node, state)
+                if "error" in result:
+                    raise Exception(result["error"])
+                final_text = result.get("reply") or "Visualization generated."
+                final_chart = result.get("chart_config")
+                final_reasoning = result.get("reasoning", "")
 
-        if response_obj:
-            # ── 6. Persist AI response ────────────────────────────────────────
-            save_message(request.session_id, "ai", response_obj.message)
-            extras = {
-                k: v for k, v in {
-                    "chart":     response_obj.chart,
-                    "sql":       response_obj.sql,
-                    "code":      response_obj.code,
-                    "insights":  response_obj.insights,
-                    "anomalies": response_obj.anomalies,
-                }.items() if v
+            elif mode == "anomaly":
+                yield "event: progress\ndata: " + json.dumps({"step": "anomaly", "message": "Anomaly Agent: Inspecting Isolation Forest outliers..."}) + "\n\n"
+                await asyncio.sleep(0.1)
+                from agents.anomaly_agent import anomaly_node
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(None, anomaly_node, state)
+                if "error" in result:
+                    raise Exception(result["error"])
+                final_text = result.get("reply") or result.get("insights") or ""
+                final_anomalies = result.get("anomalies")
+                final_insights = result.get("insights")
+                final_reasoning = result.get("reasoning", "")
+
+            elif mode == "insights":
+                yield "event: progress\ndata: " + json.dumps({"step": "insight", "message": "Insights Agent: Generating business analysis summary..."}) + "\n\n"
+                await asyncio.sleep(0.1)
+                from agents.insight_agent import insight_node
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(None, insight_node, state)
+                if "error" in result:
+                    raise Exception(result["error"])
+                final_text = result.get("reply") or result.get("insights") or ""
+                final_insights = result.get("insights")
+                final_reasoning = result.get("reasoning", "")
+
+            else:  # auto mode - full LangGraph event streaming
+                from graphs.workflow import app
+                async for event in app.astream_events(state, version="v2"):
+                    kind = event.get("event")
+                    name = event.get("name")
+                    
+                    # 1. Track Node transitions (on_chain_start/on_chain_end for node functions)
+                    if kind == "on_chain_start" and name in [
+                        "planner", "dataset", "supervisor", "analysis", "sql", "chart", "anomaly", "insight", "reasoning_agent"
+                    ]:
+                        display_msgs = {
+                            "planner": "Execution Planner: Drafting step-by-step query plan...",
+                            "dataset": "Dataset Loader: Verifying schema structures...",
+                            "supervisor": "Supervisor Router: Analyzing planning steps and routing...",
+                            "analysis": "Pandas Agent: Writing and running database code...",
+                            "sql": "SQL Agent: Formulating and executing SQL queries...",
+                            "chart": "Graph Agent: Creating Plotly visualization config...",
+                            "anomaly": "Anomaly Agent: Analyzing Isolation Forest outliers...",
+                            "insight": "Insights Agent: Drafting conversational summary...",
+                            "reasoning_agent": "Reasoning Tracer: Finalizing execution path audit..."
+                        }
+                        msg = display_msgs.get(name, f"Running {name}...")
+                        yield "event: progress\ndata: " + json.dumps({"step": name, "message": msg}) + "\n\n"
+                        
+                    # 2. Track chat model streaming tokens
+                    elif kind == "on_chat_model_stream":
+                        content = event.get("data", {}).get("chunk", {}).content
+                        if content:
+                            yield "event: token\ndata: " + json.dumps({"text": content}) + "\n\n"
+                            
+                    # 3. Capture final state values once chains finish
+                    elif kind == "on_chain_end" and name == "LangGraph":
+                        outputs = event.get("data", {}).get("output", {})
+                        if outputs:
+                            if outputs.get("error"):
+                                raise Exception(outputs["error"])
+                            final_text = outputs.get("reply") or outputs.get("insights") or "Analysis complete."
+                            final_chart = outputs.get("chart_config")
+                            final_sql = outputs.get("sql_query")
+                            final_code = outputs.get("pandas_code")
+                            final_insights = outputs.get("insights")
+                            final_reasoning = outputs.get("reasoning", "Orchestrated agentic workflow.")
+                            final_anomalies = outputs.get("anomalies")
+
+            if final_text and not request.agent_mode == "auto":
+                # Yield tokens incrementally for standard synchronous fallback nodes
+                for chunk in [final_text[i:i+4] for i in range(0, len(final_text), 4)]:
+                    yield "event: token\ndata: " + json.dumps({"text": chunk}) + "\n\n"
+                    await asyncio.sleep(0.01)
+
+            # Yield final consolidated payload
+            result_payload = {
+                "message": final_text or "Analysis complete.",
+                "chart": final_chart,
+                "sql": final_sql,
+                "code": final_code,
+                "insights": final_insights,
+                "reasoning": final_reasoning,
+                "anomalies": final_anomalies,
             }
-            _save_message(db_session, "ai", response_obj.message, mode or "auto", extras, db)
-            return response_obj
+            yield "event: result\ndata: " + json.dumps(result_payload) + "\n\n"
 
-        raise Exception("No response generated.")
+            # Persist response in background DB
+            from db.database import SessionLocal
+            with SessionLocal() as local_db:
+                from db.models import ChatSession
+                db_sess = local_db.query(ChatSession).filter(ChatSession.id == db_session_id).first()
+                if db_sess:
+                    save_message(request.session_id, "ai", result_payload["message"])
+                    extras = {
+                        k: v for k, v in {
+                            "chart":     result_payload["chart"],
+                            "sql":       result_payload["sql"],
+                            "code":      result_payload["code"],
+                            "insights":  result_payload["insights"],
+                            "anomalies": result_payload["anomalies"],
+                        }.items() if v
+                    }
+                    _save_message(db_sess, "ai", result_payload["message"], mode or "auto", extras, local_db)
+                
+                # Save in QueryCache
+                save_cache(
+                    user_id=current_user_id,
+                    agent_mode=mode or "auto",
+                    active_files=active_files,
+                    query_text=request.message,
+                    response_payload=result_payload,
+                    db=local_db
+                )
 
-    except Exception as e:
-        err_msg = f"I encountered an error while processing your request: {str(e)}"
-        save_message(request.session_id, "ai", err_msg)
-        _save_message(db_session, "ai", err_msg, mode or "auto", {"reasoning": str(e)}, db)
-        return ChatResponse(message=err_msg, reasoning=f"Error trace: {str(e)}")
+        except Exception as e:
+            err_msg = f"I encountered an error while processing your request: {str(e)}"
+            yield "event: error\ndata: " + json.dumps({"message": err_msg, "reasoning": str(e)}) + "\n\n"
+            
+            from db.database import SessionLocal
+            with SessionLocal() as local_db:
+                from db.models import ChatSession
+                db_sess = local_db.query(ChatSession).filter(ChatSession.id == db_session_id).first()
+                if db_sess:
+                    save_message(request.session_id, "ai", err_msg)
+                    _save_message(db_sess, "ai", err_msg, mode or "auto", {"reasoning": str(e)}, local_db)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

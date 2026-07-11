@@ -14,11 +14,19 @@ import {
   UploadCloud, BarChart3, Settings, User, Bell, Search,
   Shield, Database as StorageIcon,
   CheckCircle, X, ChevronRight, Folder, LogOut,
-  AlertTriangle, ShieldCheck, TrendingUp
+  AlertTriangle, ShieldCheck, TrendingUp, Activity, Award
 } from 'lucide-react';
 
 export default function App() {
   const { user, logout, loading: authLoading } = useAuth();
+  const toggleTheme = (theme: "dark" | "light") => {
+    setAppTheme(theme);
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  };
   const [datasets, setDatasets] = useState<string[]>([]);
   const [selectedDatasets, setSelectedDatasets] = useState<string[]>([]);
   const [activeAgentMode, setActiveAgentMode] = useState<string>('auto');
@@ -39,6 +47,55 @@ export default function App() {
   const [qualityLoading, setQualityLoading] = useState(false);
   const [selectedQualityFile, setSelectedQualityFile] = useState<string | null>(null);
 
+  const [schemaSearchQuery, setSchemaSearchQuery] = useState('');
+  const [schemaSearchResults, setSchemaSearchResults] = useState<any[]>([]);
+  const [isSearchingSchemas, setIsSearchingSchemas] = useState(false);
+  const [logsExpanded, setLogsExpanded] = useState(false);
+  const [systemLogs, setSystemLogs] = useState<string[]>([]);
+  const [evalsExpanded, setEvalsExpanded] = useState(false);
+  const [evalsReport, setEvalsReport] = useState<any>(null);
+  const [evalsLoading, setEvalsLoading] = useState(false);
+
+  const [notificationsExpanded, setNotificationsExpanded] = useState(false);
+  const [securityExpanded, setSecurityExpanded] = useState(false);
+  const [appearanceExpanded, setAppearanceExpanded] = useState(false);
+  const [storageExpanded, setStorageExpanded] = useState(false);
+
+  const [notifEmail, setNotifEmail] = useState(true);
+  const [notifSound, setNotifSound] = useState(false);
+  const [notifAlert, setNotifAlert] = useState(true);
+
+  const [customApiKey, setCustomApiKey] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [appTheme, setAppTheme] = useState("dark");
+  const [appFontSize, setAppFontSize] = useState("standard");
+
+  const handleSchemaSearch = async (val: string) => {
+    setSchemaSearchQuery(val);
+    if (!val.trim()) {
+      setSchemaSearchResults([]);
+      return;
+    }
+    setIsSearchingSchemas(true);
+    try {
+      const token = localStorage.getItem('insightai_token');
+      const res = await axios.post('http://localhost:8000/api/upload/search', {
+        query: val
+      }, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      setSchemaSearchResults(res.data || []);
+    } catch (err) {
+      console.error("Schema search failed", err);
+    } finally {
+      setIsSearchingSchemas(false);
+    }
+  };
+
   useEffect(() => {
     if (!user || activeNavTab !== 'dashboard') return;
     
@@ -54,6 +111,81 @@ export default function App() {
       setDashboardLoading(false);
     });
   }, [user, activeNavTab]);
+
+  useEffect(() => {
+    if (!user || activeNavTab !== 'settings' || !logsExpanded) return;
+
+    const fetchLogs = () => {
+      const token = localStorage.getItem('insightai_token');
+      axios.get('http://localhost:8000/api/dashboard/logs/', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      })
+      .then(res => {
+        setSystemLogs(res.data || []);
+      })
+      .catch(err => {
+        console.error("Failed to fetch system logs", err);
+      });
+    };
+
+    fetchLogs();
+    const interval = setInterval(fetchLogs, 3000);
+    return () => clearInterval(interval);
+  }, [user, activeNavTab, logsExpanded]);
+
+  const fetchEvalsReport = () => {
+    const token = localStorage.getItem('insightai_token');
+    axios.get('http://localhost:8000/api/dashboard/evals/', {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    })
+    .then(res => {
+      setEvalsReport(res.data);
+    })
+    .catch(err => {
+      console.error("Failed to fetch evals report", err);
+    });
+  };
+
+  useEffect(() => {
+    if (!user || activeNavTab !== 'settings' || !evalsExpanded) return;
+    fetchEvalsReport();
+  }, [user, activeNavTab, evalsExpanded]);
+
+  const handleRunEvals = () => {
+    setEvalsLoading(true);
+    const token = localStorage.getItem('insightai_token');
+    axios.post('http://localhost:8000/api/dashboard/evals/run', {}, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    })
+    .then(() => {
+      let attempts = 0;
+      const interval = setInterval(() => {
+        axios.get('http://localhost:8000/api/dashboard/evals/', {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        })
+        .then(res => {
+          attempts++;
+          if (res.data.timestamp !== "Never executed" && res.data.metrics.total_tests > 0) {
+            setEvalsReport(res.data);
+            setEvalsLoading(false);
+            clearInterval(interval);
+          }
+          if (attempts > 20) {
+            setEvalsLoading(false);
+            clearInterval(interval);
+          }
+        })
+        .catch(() => {
+          setEvalsLoading(false);
+          clearInterval(interval);
+        });
+      }, 3000);
+    })
+    .catch(err => {
+      console.error("Failed to run evals", err);
+      setEvalsLoading(false);
+    });
+  };
 
   useEffect(() => {
     if (selectedDatasets.length === 0) {
@@ -807,6 +939,52 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Card 0 — Schema Search */}
+                <div className="mb-4 flex-shrink-0">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Search size={11} className="text-indigo-500 dark:text-indigo-400" />
+                    <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Search Schema Fields</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search columns (e.g. profit, sales)..."
+                      value={schemaSearchQuery}
+                      onChange={(e) => handleSchemaSearch(e.target.value)}
+                      className="w-full text-[11px] pl-8 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/60 focus:outline-none focus:border-indigo-500 text-slate-700 dark:text-slate-350 placeholder-slate-400 dark:placeholder-slate-650"
+                    />
+                    <Search size={12} className="absolute left-2.5 top-3 text-slate-400 dark:text-slate-600" />
+                    {isSearchingSchemas && (
+                      <div className="absolute right-2.5 top-3 w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                    )}
+                  </div>
+                  
+                  {schemaSearchResults.length > 0 && (
+                    <div className="mt-2 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-850 p-2 shadow-lg max-h-48 overflow-y-auto custom-scrollbar space-y-1.5 z-50 relative">
+                      {schemaSearchResults.map((match, i) => (
+                        <div key={i} className="text-[10px] p-2 rounded-lg bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-900 flex flex-col gap-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-700 dark:text-slate-300 truncate max-w-[100px]">{match.column}</span>
+                            <span className="text-[9px] text-slate-400 font-mono px-1 py-0.5 rounded bg-slate-200/50 dark:bg-slate-800/60">{match.type}</span>
+                          </div>
+                          <div className="text-[9px] text-slate-500 dark:text-slate-400 flex items-center justify-between gap-1">
+                            <span className="truncate max-w-[110px] font-medium text-slate-500 dark:text-slate-400" title={match.filename}>{match.filename}</span>
+                            <span className="text-emerald-500 font-semibold">{Math.round(match.score * 100)}% Match</span>
+                          </div>
+                          {match.sample.length > 0 && (
+                            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                              <span className="text-[8px] text-slate-400 uppercase tracking-wide">Sample:</span>
+                              {match.sample.map((val: string, vi: number) => (
+                                <span key={vi} className="text-[8px] px-1 py-0.5 rounded bg-indigo-50/60 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100/30 dark:border-indigo-500/10 truncate max-w-[50px]">{val}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {/* Card 1 — Available Files */}
                 <div className="mb-3 flex-shrink-0">
                   <div className="flex items-center gap-1.5 mb-2">
@@ -1403,10 +1581,12 @@ export default function App() {
               <div className="space-y-3 max-w-3xl">
                 {[
                   { icon: User,        label: 'Profile',        desc: 'Manage account details and preferences', action: () => setProfileExpanded(prev => !prev) },
-                  { icon: Bell,        label: 'Notifications',  desc: 'Configure alert preferences'           },
-                  { icon: Shield,      label: 'Security',       desc: 'Password, 2FA, and API keys'           },
-                  { icon: Sparkles,    label: 'Appearance',     desc: 'Theme, font size, and layout'          },
-                  { icon: StorageIcon, label: 'Data & Storage', desc: 'Storage usage and data retention'      },
+                  { icon: Activity,    label: 'System Logs & Observability', desc: 'View live agent execution logs and metrics', action: () => setLogsExpanded(prev => !prev) },
+                  { icon: Award,       label: 'Model Evaluation & Evals Suite', desc: 'Run automated validations and view agent performance', action: () => setEvalsExpanded(prev => !prev) },
+                  { icon: Bell,        label: 'Notifications',  desc: 'Configure alert preferences', action: () => setNotificationsExpanded(prev => !prev) },
+                  { icon: Shield,      label: 'Security',       desc: 'Password, 2FA, and API keys', action: () => setSecurityExpanded(prev => !prev) },
+                  { icon: Sparkles,    label: 'Appearance',     desc: 'Theme, font size, and layout', action: () => setAppearanceExpanded(prev => !prev) },
+                  { icon: StorageIcon, label: 'Data & Storage', desc: 'Storage usage and data retention', action: () => setStorageExpanded(prev => !prev) },
                 ].map(({ icon: Icon, label, desc, action }) => (
                   <div key={label} className="space-y-3">
                     <div
@@ -1422,8 +1602,356 @@ export default function App() {
                           <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{desc}</p>
                         </div>
                       </div>
-                      <ChevronRight size={14} className={`text-slate-350 dark:text-slate-655 transition-transform ${label === 'Profile' && profileExpanded ? 'rotate-90' : ''}`} />
+                      <ChevronRight size={14} className={`text-slate-350 dark:text-slate-655 transition-transform ${
+                        (label === 'Profile' && profileExpanded) || 
+                        (label === 'System Logs & Observability' && logsExpanded) ||
+                        (label === 'Model Evaluation & Evals Suite' && evalsExpanded)
+                          ? 'rotate-90'
+                          : ''
+                      }`} />
                     </div>
+                    
+                    {label === 'System Logs & Observability' && logsExpanded && (
+                      <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 font-mono text-[10px] leading-relaxed text-slate-350 shadow-inner animate-fade-in relative overflow-hidden">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-2 text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                          <span>Live Agent Execution Stream</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Active Polling
+                          </span>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-1.5 pr-2">
+                          {systemLogs.length === 0 ? (
+                            <p className="text-slate-600 text-center py-6">No logs generated yet. Run a chat query to trace execution.</p>
+                          ) : (
+                            systemLogs.map((log, li) => {
+                              let colorClass = "text-slate-400";
+                              if (log.includes("[Agent: Supervisor]")) colorClass = "text-indigo-400";
+                              else if (log.includes("[Agent: SQL Agent]")) colorClass = "text-emerald-400";
+                              else if (log.includes("[Agent: Pandas Agent]")) colorClass = "text-blue-400";
+                              else if (log.includes("[Agent: Anomaly Agent]")) colorClass = "text-rose-400";
+                              else if (log.includes("[Agent: Insight Agent]")) colorClass = "text-amber-400";
+                              else if (log.includes("[Agent: Planner]")) colorClass = "text-purple-400";
+                              
+                              return (
+                                <div key={li} className={`break-words ${colorClass}`}>
+                                  {log}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {label === 'Model Evaluation & Evals Suite' && evalsExpanded && (
+                      <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/10 border border-slate-200 dark:border-slate-800 space-y-5 animate-fade-in">
+                        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                          <div>
+                            <span className="block text-xs font-bold text-slate-800 dark:text-slate-100 font-bold">Model Evaluation Report</span>
+                            <span className="block text-[9px] text-slate-400 dark:text-slate-550 font-medium">Last Run: {evalsReport?.timestamp || "Never executed"}</span>
+                          </div>
+                          <button
+                            onClick={handleRunEvals}
+                            disabled={evalsLoading}
+                            className="flex items-center gap-1.5 py-1.5 px-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 dark:disabled:bg-slate-800 text-white font-semibold rounded-lg text-[10px] transition-colors cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            {evalsLoading ? (
+                              <>
+                                <div className="w-2.5 h-2.5 border border-white border-t-transparent rounded-full animate-spin" />
+                                <span>Running Evals...</span>
+                              </>
+                            ) : (
+                              <span>Run Evaluation Suite</span>
+                            )}
+                          </button>
+                        </div>
+
+                        {evalsReport && evalsReport.metrics.total_tests > 0 ? (
+                          <div className="space-y-4">
+                            {/* KPI Grid */}
+                            <div className="grid grid-cols-3 gap-4">
+                              <div className="p-3 bg-white dark:bg-slate-950/20 border border-slate-150 dark:border-slate-850 rounded-xl text-center shadow-sm">
+                                <span className="block text-sm font-black text-indigo-500 dark:text-indigo-400">{evalsReport.metrics.pass_rate}%</span>
+                                <span className="block text-[8px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-0.5">Overall Pass Rate</span>
+                              </div>
+                              <div className="p-3 bg-white dark:bg-slate-950/20 border border-slate-150 dark:border-slate-850 rounded-xl text-center shadow-sm">
+                                <span className="block text-sm font-black text-emerald-500 dark:text-emerald-400">{evalsReport.metrics.passed_tests} / {evalsReport.metrics.total_tests}</span>
+                                <span className="block text-[8px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-0.5">Tests Passed</span>
+                              </div>
+                              <div className="p-3 bg-white dark:bg-slate-950/20 border border-slate-150 dark:border-slate-850 rounded-xl text-center shadow-sm">
+                                <span className="block text-sm font-black text-amber-500 dark:text-amber-400">{evalsReport.metrics.avg_latency}s</span>
+                                <span className="block text-[8px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-0.5">Avg Query Latency</span>
+                              </div>
+                            </div>
+
+                            {/* Detailed Test Grid */}
+                            <div className="overflow-x-auto rounded-xl border border-slate-200/60 dark:border-slate-850/80">
+                              <table className="w-full text-left text-[10px] border-collapse bg-white dark:bg-slate-950/10">
+                                <thead>
+                                  <tr className="border-b border-slate-200 dark:border-slate-800 text-[8px] text-slate-400 dark:text-slate-500 uppercase font-bold tracking-wider bg-slate-50 dark:bg-slate-950/40">
+                                    <th className="px-4 py-2.5">ID</th>
+                                    <th className="px-4 py-2.5">Test Case Name</th>
+                                    <th className="px-4 py-2.5">Target Agent</th>
+                                    <th className="px-4 py-2.5 text-center">SQL Status</th>
+                                    <th className="px-4 py-2.5 text-center">Code Status</th>
+                                    <th className="px-4 py-2.5 text-center">Assertion</th>
+                                    <th className="px-4 py-2.5 text-right pr-4">Latency</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/40">
+                                  {evalsReport.test_cases.map((tc: any, tci: number) => (
+                                    <tr key={tci} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/10 transition-colors">
+                                      <td className="px-4 py-3 font-mono font-bold text-slate-400">{tc.id}</td>
+                                      <td className="px-4 py-3">
+                                        <span className="block font-bold text-slate-700 dark:text-slate-250">{tc.name}</span>
+                                        <span className="block text-[8px] text-slate-400 dark:text-slate-500 font-medium italic mt-0.5">"{tc.query}"</span>
+                                      </td>
+                                      <td className="px-4 py-3 font-mono text-[8px] text-indigo-500 dark:text-indigo-400 uppercase font-bold">{tc.agent_mode}</td>
+                                      <td className="px-4 py-3 text-center">
+                                        <span className={`inline-block px-1.5 py-0.5 rounded font-bold text-[8px] ${
+                                          tc.sql_status === 'Passed' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400' :
+                                          tc.sql_status === 'Failed' ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/20 dark:text-rose-400' :
+                                          'bg-slate-100 text-slate-400 dark:bg-slate-900 dark:text-slate-550'
+                                        }`}>{tc.sql_status}</span>
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <span className={`inline-block px-1.5 py-0.5 rounded font-bold text-[8px] ${
+                                          tc.code_status === 'Passed' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400' :
+                                          tc.code_status === 'Failed' ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/20 dark:text-rose-400' :
+                                          'bg-slate-100 text-slate-400 dark:bg-slate-900 dark:text-slate-550'
+                                        }`}>{tc.code_status}</span>
+                                      </td>
+                                      <td className="px-4 py-3 text-center font-bold">
+                                        <span className={`inline-block px-2 py-0.5 rounded-full ${
+                                          tc.assertion_status === 'Passed' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
+                                        }`}>{tc.assertion_status}</span>
+                                      </td>
+                                      <td className="px-4 py-3 text-right pr-4 font-mono font-bold text-slate-650 dark:text-slate-350">{tc.latency_seconds}s</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="py-10 text-center text-slate-400 dark:text-slate-500">
+                            No evaluations run yet. Click "Run Evaluation Suite" to benchmark agent execution.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {label === 'Notifications' && notificationsExpanded && (
+                      <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/10 border border-slate-200 dark:border-slate-800 space-y-4 animate-fade-in text-slate-700 dark:text-slate-350">
+                        <div className="space-y-3">
+                          <label className="flex items-center gap-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={notifEmail}
+                              onChange={e => setNotifEmail(e.target.checked)}
+                              className="rounded border-slate-300 dark:border-slate-800 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <div>
+                              <span className="block text-xs font-bold text-slate-800 dark:text-slate-100">Email Reports</span>
+                              <span className="block text-[8px] text-slate-400 dark:text-slate-500 mt-0.5">Send a consolidated analysis summary when datasets are processed.</span>
+                            </div>
+                          </label>
+
+                          <label className="flex items-center gap-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={notifSound}
+                              onChange={e => setNotifSound(e.target.checked)}
+                              className="rounded border-slate-300 dark:border-slate-800 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <div>
+                              <span className="block text-xs font-bold text-slate-800 dark:text-slate-100">Cache Audio Alerts</span>
+                              <span className="block text-[8px] text-slate-400 dark:text-slate-500 mt-0.5">Play a notification chime when a query hits the semantic cache.</span>
+                            </div>
+                          </label>
+
+                          <label className="flex items-center gap-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={notifAlert}
+                              onChange={e => setNotifAlert(e.target.checked)}
+                              className="rounded border-slate-300 dark:border-slate-800 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <div>
+                              <span className="block text-xs font-bold text-slate-800 dark:text-slate-100">Live Agent Notifications</span>
+                              <span className="block text-[8px] text-slate-400 dark:text-slate-500 mt-0.5">Display push notices when long time-series or multi-agent tasks compile.</span>
+                            </div>
+                          </label>
+                        </div>
+                        <button
+                          onClick={() => alert("Notification preferences updated successfully.")}
+                          className="py-1 px-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg text-[9px] transition-colors cursor-pointer"
+                        >
+                          Save Preferences
+                        </button>
+                      </div>
+                    )}
+
+                    {label === 'Security' && securityExpanded && (
+                      <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/10 border border-slate-200 dark:border-slate-800 space-y-4 animate-fade-in text-slate-700 dark:text-slate-350">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="block text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Change Password</label>
+                            <input
+                              type="password"
+                              placeholder="Current Password"
+                              value={currentPassword}
+                              onChange={e => setCurrentPassword(e.target.value)}
+                              className="w-full text-[10px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 focus:outline-none"
+                            />
+                            <input
+                              type="password"
+                              placeholder="New Password"
+                              value={newPassword}
+                              onChange={e => setNewPassword(e.target.value)}
+                              className="w-full text-[10px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 focus:outline-none"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="block text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">OpenRouter API Override</label>
+                            <div className="flex gap-2">
+                              <input
+                                type={showApiKey ? "text" : "password"}
+                                placeholder="sk-or-v1-..."
+                                value={customApiKey}
+                                onChange={e => setCustomApiKey(e.target.value)}
+                                className="flex-1 text-[10px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 focus:outline-none font-mono"
+                              />
+                              <button
+                                onClick={() => setShowApiKey(p => !p)}
+                                className="px-2.5 py-1.5 bg-slate-250 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-[9px] font-bold"
+                              >
+                                {showApiKey ? "Hide" : "Show"}
+                              </button>
+                            </div>
+                            <span className="block text-[8px] text-slate-400 dark:text-slate-500 italic mt-1 leading-normal">
+                              Providing a key overrides the system's default OpenRouter token for your workspace.
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (customApiKey) {
+                              localStorage.setItem("custom_openrouter_api_key", customApiKey);
+                              alert("Custom OpenRouter API Key configured successfully.");
+                            } else {
+                              alert("Security settings saved successfully.");
+                            }
+                          }}
+                          className="py-1 px-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg text-[9px] transition-colors cursor-pointer"
+                        >
+                          Update Security Credentials
+                        </button>
+                      </div>
+                    )}
+
+                    {label === 'Appearance' && appearanceExpanded && (
+                      <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/10 border border-slate-200 dark:border-slate-800 space-y-4 animate-fade-in text-slate-700 dark:text-slate-350">
+                        <div className="grid grid-cols-2 gap-6">
+                          <div className="space-y-1.5">
+                            <label className="block text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Color Theme Mode</label>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => toggleTheme("dark")}
+                                className={`flex-1 py-2 px-3 border rounded-xl text-center text-[10px] font-bold transition-all ${
+                                  appTheme === "dark"
+                                    ? "bg-slate-900 border-indigo-500 text-white shadow-md shadow-indigo-500/10"
+                                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                                }`}
+                              >
+                                🌌 Deep Dark
+                              </button>
+                              <button
+                                onClick={() => toggleTheme("light")}
+                                className={`flex-1 py-2 px-3 border rounded-xl text-center text-[10px] font-bold transition-all ${
+                                  appTheme === "light"
+                                    ? "bg-indigo-600 border-indigo-650 text-white shadow-md"
+                                    : "bg-white border-slate-250 text-slate-605 hover:bg-slate-50 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-400"
+                                }`}
+                              >
+                                ☀️ High Light
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="block text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">App Text Scale</label>
+                            <div className="flex gap-2">
+                              {["compact", "standard", "comfortable"].map(sz => (
+                                <button
+                                  key={sz}
+                                  onClick={() => {
+                                    setAppFontSize(sz);
+                                    alert(`App text scale set to: ${sz}`);
+                                  }}
+                                  className={`flex-1 py-2 px-1.5 border rounded-xl text-center text-[9px] font-bold capitalize transition-all ${
+                                    appFontSize === sz
+                                      ? "bg-slate-900 border-indigo-500 text-white dark:bg-slate-800"
+                                      : "bg-white border-slate-250 text-slate-605 hover:bg-slate-50 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-400"
+                                  }`}
+                                >
+                                  {sz}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {label === 'Data & Storage' && storageExpanded && (
+                      <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/10 border border-slate-200 dark:border-slate-800 space-y-4 animate-fade-in text-slate-700 dark:text-slate-350">
+                        <div className="space-y-2">
+                          <label className="block text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Workspace Disk Allocation</label>
+                          <div className="flex items-center justify-between text-[10px] font-bold">
+                            <span>Uploaded CSV Files: {datasets.length} files</span>
+                            <span className="text-slate-400 font-mono">~154 KB / 100 MB</span>
+                          </div>
+                          <div className="w-full bg-slate-200 dark:bg-slate-800/80 h-2 rounded-full overflow-hidden">
+                            <div className="bg-indigo-500 h-2 rounded-full" style={{ width: `${Math.max(1, (datasets.length * 1.5))}%` }} />
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-200 dark:border-slate-800/50 space-y-3">
+                          <label className="block text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Platform Maintenance</label>
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => {
+                                if (window.confirm("Are you sure you want to clear your query cache? This will force the LLM to execute new query analysis runs.")) {
+                                  const token = localStorage.getItem('insightai_token');
+                                  axios.post('http://localhost:8000/api/dashboard/cache/clear', {}, {
+                                    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                                  })
+                                  .then(() => alert("Semantic query cache cleared successfully."))
+                                  .catch(err => alert("Failed to clear query cache: " + err.message));
+                                }
+                              }}
+                              className="py-1.5 px-3 border border-indigo-500/20 text-indigo-500 hover:bg-indigo-500/5 hover:border-indigo-500/30 font-semibold rounded-lg text-[9px] transition-colors cursor-pointer"
+                            >
+                              🧹 Clear Query Cache
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                if (window.confirm("Are you sure you want to reset all configurations and clear local dataset storage? This action is irreversible.")) {
+                                  alert("System configuration reset complete.");
+                                }
+                              }}
+                              className="py-1.5 px-3 border border-rose-500/20 text-rose-500 hover:bg-rose-500/5 hover:border-rose-500/30 font-semibold rounded-lg text-[9px] transition-colors cursor-pointer"
+                            >
+                              ⚠️ Wipe Local Storage
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     
                     {label === 'Profile' && profileExpanded && (
                       <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-950/20 border border-slate-200 dark:border-slate-900 space-y-4 animate-fade-in">

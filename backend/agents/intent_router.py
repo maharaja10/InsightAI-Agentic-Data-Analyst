@@ -50,6 +50,7 @@ def route_intent(query: str) -> list[str]:
             api_key=os.environ.get("OPENROUTER_API_KEY"),
             model="cohere/north-mini-code:free",
             temperature=0,
+            timeout=45
         )
         chain = router_prompt | llm
         resp = chain.invoke({"query": query})

@@ -76,3 +76,15 @@ class ChatMessage(Base):
             except Exception:
                 return {}
         return {}
+
+
+class QueryCache(Base):
+    __tablename__ = "query_cache"
+
+    id            = Column(Integer, primary_key=True, index=True)
+    user_id       = Column(Integer, ForeignKey("users.id"), nullable=False)
+    query_text    = Column(Text, nullable=False)
+    agent_mode    = Column(String(32), nullable=False)
+    datasets_json = Column(Text, nullable=False)          # JSON array of files checked
+    response_json = Column(Text, nullable=False)          # Cached ChatResponse payload JSON
+    created_at    = Column(DateTime, default=datetime.utcnow)

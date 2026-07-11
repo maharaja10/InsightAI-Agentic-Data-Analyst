@@ -8,7 +8,8 @@ llm = ChatOpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.environ.get("OPENROUTER_API_KEY"),
     model="cohere/north-mini-code:free",
-    temperature=0
+    temperature=0,
+    timeout=45
 )
 
 supervisor_prompt = ChatPromptTemplate.from_messages([
@@ -50,6 +51,8 @@ def supervisor_node(state: AgentState):
         current_reasoning = state.get("reasoning", "")
         new_reasoning = f"{current_reasoning}\n\nSupervisor Agent: Dynamically routed task to {', '.join(required)}."
         
+        from utils.logger import log_agent_action
+        log_agent_action("Supervisor", state.get("session_id", "N/A"), "Routing query", f"Target agents: {required}")
         return {"required_agents": required, "reasoning": new_reasoning}
         
     except Exception as e:
@@ -57,4 +60,6 @@ def supervisor_node(state: AgentState):
         fallback = ["sql", "chart", "insight"]
         current_reasoning = state.get("reasoning", "")
         new_reasoning = f"{current_reasoning}\n\nSupervisor Agent: Failed to route ({str(e)}). Fallback to {', '.join(fallback)}."
+        from utils.logger import log_agent_action
+        log_agent_action("Supervisor", state.get("session_id", "N/A"), "Routing error", f"Error: {str(e)}. Fallback: {fallback}")
         return {"required_agents": fallback, "reasoning": new_reasoning}

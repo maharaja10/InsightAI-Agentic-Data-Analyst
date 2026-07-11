@@ -12,6 +12,7 @@ class AgentState(TypedDict):
     pandas_code: Optional[str]
     chart_config: Optional[Dict[str, Any]]
     insights: Optional[str]
+    reply: Optional[str]
     reasoning: Optional[str]
     anomalies: Optional[List[Dict[str, Any]]]
     required_agents: Optional[List[str]]

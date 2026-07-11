@@ -76,6 +76,8 @@ def anomaly_node(state: AgentState):
                 api_key=os.environ.get("OPENROUTER_API_KEY"),
                 model=ANOMALY_MODEL,
                 temperature=0,
+                timeout=45,
+                streaming=True
             )
 
             chain    = anomaly_prompt | llm
@@ -126,6 +128,8 @@ def anomaly_node(state: AgentState):
             reasoning_detail = "Anomaly Agent: Insufficient numeric data for Isolation Forest."
 
         current_reasoning = state.get("reasoning", "")
+        from utils.logger import log_agent_action
+        log_agent_action("Anomaly Agent", state.get("session_id", "N/A"), "Detected anomalies", reasoning_detail)
         return {
             "anomalies": anomalies,
             "insights":  interpretation,
@@ -133,4 +137,6 @@ def anomaly_node(state: AgentState):
         }
 
     except Exception as e:
+        from utils.logger import log_agent_action
+        log_agent_action("Anomaly Agent", state.get("session_id", "N/A"), "Anomaly analysis error", str(e))
         return {"error": f"Anomaly detection failed: {str(e)}"}

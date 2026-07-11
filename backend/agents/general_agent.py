@@ -96,6 +96,8 @@ def general_chatbot_node(state: AgentState):
             api_key=os.environ.get("OPENROUTER_API_KEY"),
             model="cohere/north-mini-code:free",
             temperature=0.0,
+            timeout=45,
+            streaming=True
         )
 
         # Step 1: Request code generation if needed
