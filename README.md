@@ -12,6 +12,21 @@ InsightAI doesn't just execute predefined queries; it actively reasons over your
 
 ---
 
+## 📊 Sample Dataset Drive Links
+
+https://drive.google.com/drive/folders/1KUEW6C8oeEcsxKsEW4ZUtrXlFCrF6hPU?usp=sharing
+---
+
+## 📷 Screenshots Drive Link
+
+https://drive.google.com/drive/folders/1wOKz7cAhz4Hi0I684S2ZAqkYKVdfE5Ja?usp=sharing
+
+---
+
+## 🎥 Demo Video Drive
+
+https://drive.google.com/drive/folders/1wwJoFq0EZ6xwjAJFVDNnzBCgNQnrd-Nm?usp=sharing
+
 ## 🔍 Complete Project Description
 
 InsightAI is structured to address the core challenges of natural language interfaces for data analytics: code generation errors and brittle database integrations. The system solves these problems through three core paradigms:
@@ -203,24 +218,6 @@ npm install
 npm run dev
 ```
 The client will start at `http://localhost:5173`.
-
----
-
-## 📊 Sample Dataset Drive Links
-
-https://drive.google.com/drive/folders/1KUEW6C8oeEcsxKsEW4ZUtrXlFCrF6hPU?usp=sharing
----
-
-## 📷 Screenshots Drive Link
-
-https://drive.google.com/drive/folders/1wOKz7cAhz4Hi0I684S2ZAqkYKVdfE5Ja?usp=sharing
-
----
-
-## 🎥 Demo Video Drive
-
-https://drive.google.com/drive/folders/1wwJoFq0EZ6xwjAJFVDNnzBCgNQnrd-Nm?usp=sharing
-
 
 ---
 
