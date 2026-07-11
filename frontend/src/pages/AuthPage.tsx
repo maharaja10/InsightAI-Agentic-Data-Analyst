@@ -13,11 +13,13 @@ export default function AuthPage() {
   const [displayName, setDisplayName] = useState('');
   const [showPass,    setShowPass]    = useState(false);
   const [error,       setError]       = useState('');
+  const [successMsg,  setSuccessMsg]  = useState('');
   const [loading,     setLoading]     = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccessMsg('');
     if (!email || !password) { setError('Email and password are required.'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
 
@@ -27,6 +29,9 @@ export default function AuthPage() {
         await login(email, password);
       } else {
         await register(email, password, displayName || undefined);
+        setSuccessMsg('Account created successfully. Please sign in.');
+        setMode('login');
+        setPassword('');
       }
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Something went wrong. Please try again.');
@@ -36,7 +41,7 @@ export default function AuthPage() {
   };
 
   const switchMode = (m: Mode) => {
-    setMode(m); setError(''); setEmail(''); setPassword(''); setDisplayName('');
+    setMode(m); setError(''); setSuccessMsg(''); setEmail(''); setPassword(''); setDisplayName('');
   };
 
   return (
@@ -211,6 +216,14 @@ export default function AuthPage() {
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs animate-fade-in">
                   <AlertCircle size={12} className="flex-shrink-0" />
                   <span>{error}</span>
+                </div>
+              )}
+
+              {/* Success */}
+              {successMsg && (
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs animate-fade-in">
+                  <Shield size={12} className="flex-shrink-0" />
+                  <span>{successMsg}</span>
                 </div>
               )}
 

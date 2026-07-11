@@ -154,21 +154,32 @@ html.dark, body.dark {
 
 /* ─────────────────── Chart Container ─────────────────── */
 .chart-container {
-  background: linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(30,27,75,0.95) 50%, rgba(15,23,42,0.95) 100%);
-  border: 1px solid rgba(129,140,248,0.2);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
   border-radius: 1.25rem;
-  box-shadow: 0 0 0 1px rgba(129,140,248,0.1), 0 20px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
   position: relative;
   overflow: hidden;
+}
+
+.dark .chart-container {
+  background: linear-gradient(135deg, rgba(15,23,42,0.95) 0%, rgba(30,27,75,0.95) 50%, rgba(15,23,42,0.95) 100%);
+  border: 1px solid rgba(129,140,248,0.2);
+  box-shadow: 0 0 0 1px rgba(129,140,248,0.1), 0 20px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
 .chart-container::before {
   content: '';
   position: absolute;
   inset: 0;
+  background: radial-gradient(ellipse at 20% 20%, rgba(99,102,241,0.04) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 80%, rgba(139,92,246,0.03) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.dark .chart-container::before {
   background: radial-gradient(ellipse at 20% 20%, rgba(129,140,248,0.08) 0%, transparent 60%),
               radial-gradient(ellipse at 80% 80%, rgba(167,139,250,0.06) 0%, transparent 60%);
-  pointer-events: none;
 }
 
 /* ─────────────────── Glow Buttons ─────────────────── */
@@ -344,9 +355,7 @@ html.dark, body.dark {
 
 /* ─────────────────── Chart badge ─────────────────── */
 .chart-badge {
-  background: linear-gradient(135deg, rgba(129,140,248,0.2), rgba(167,139,250,0.15));
-  border: 1px solid rgba(129,140,248,0.35);
-  color: #a5b4fc;
+  border: 1px solid transparent;
   padding: 3px 10px;
   border-radius: 20px;
   font-size: 0.7rem;

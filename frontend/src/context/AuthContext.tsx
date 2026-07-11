@@ -74,15 +74,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Register ──────────────────────────────────────────────────────────────
   const register = async (email: string, password: string, displayName?: string) => {
-    const res = await axios.post(`${API}/api/auth/register`, {
+    await axios.post(`${API}/api/auth/register`, {
       email, password, display_name: displayName,
     });
-    const { access_token, user_id, email: userEmail, display_name } = res.data;
-
-    localStorage.setItem('insightai_token', access_token);
-    axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-    setToken(access_token);
-    setUser({ id: user_id, email: userEmail, display_name });
+    // Do not set token or user to force manual login after registration.
   };
 
   // ── Logout ────────────────────────────────────────────────────────────────

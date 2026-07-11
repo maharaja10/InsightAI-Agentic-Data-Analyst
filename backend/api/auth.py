@@ -27,6 +27,10 @@ class RegisterRequest(BaseModel):
     password: str
     display_name: Optional[str] = None
 
+class UpdatePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -83,9 +87,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
-@router.post("/register", response_model=TokenResponse, status_code=201)
+@router.post("/register", status_code=201)
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
-    """Create a new user account and immediately return a JWT token."""
+    """Create a new user account."""
     if db.query(User).filter(User.email == req.email).first():
         raise HTTPException(status_code=400, detail="An account with this email already exists.")
 
@@ -101,11 +105,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    token = create_access_token(user.id, user.email)
-    return TokenResponse(
-        access_token=token, user_id=user.id,
-        email=user.email, display_name=user.display_name,
-    )
+    return {"message": "Account created successfully. Please sign in."}
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -126,3 +126,22 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
 def get_me(current_user: User = Depends(get_current_user)):
     """Return the currently authenticated user's profile."""
     return current_user
+
+from fastapi.responses import JSONResponse
+
+@router.put("/update-password")
+def update_password(req: UpdatePasswordRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Update the current user's password."""
+    try:
+        if not verify_password(req.current_password, current_user.hashed_password):
+            return JSONResponse(status_code=400, content={"success": False, "message": "Current password is incorrect."})
+            
+        if req.current_password == req.new_password:
+            return JSONResponse(status_code=400, content={"success": False, "message": "New password cannot be the same as the current password."})
+            
+        current_user.hashed_password = hash_password(req.new_password)
+        db.commit()
+        return {"success": True, "message": "Password updated successfully."}
+    except Exception as e:
+        db.rollback()
+        return JSONResponse(status_code=500, content={"success": False, "message": "An error occurred while updating the password."})

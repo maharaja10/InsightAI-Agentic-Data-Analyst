@@ -14,7 +14,7 @@ import {
   UploadCloud, BarChart3, Settings, User, Bell, Search,
   Shield, Database as StorageIcon,
   CheckCircle, X, ChevronRight, Folder, LogOut,
-  AlertTriangle, ShieldCheck, TrendingUp, Activity, Award
+  AlertTriangle, ShieldCheck, TrendingUp, Activity, Award, Eye, EyeOff
 } from 'lucide-react';
 
 export default function App() {
@@ -70,9 +70,86 @@ export default function App() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [isUpdatingSecurity, setIsUpdatingSecurity] = useState(false);
+  const [securityStatusMsg, setSecurityStatusMsg] = useState<string | null>(null);
+  const [securityStatusType, setSecurityStatusType] = useState<'success' | 'error'>('success');
+  const [advancedSettingsExpanded, setAdvancedSettingsExpanded] = useState(false);
+  const [apiKeyStatusMsg, setApiKeyStatusMsg] = useState<string | null>(null);
+  const [apiKeyStatusType, setApiKeyStatusType] = useState<'success' | 'error'>('success');
 
   const [appTheme, setAppTheme] = useState("dark");
-  const [appFontSize, setAppFontSize] = useState("standard");
+  const [appFontSize, setAppFontSize] = useState(localStorage.getItem("appFontSize") || "standard");
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (appFontSize === 'compact') {
+      root.style.fontSize = '14px';
+    } else if (appFontSize === 'comfortable') {
+      root.style.fontSize = '18px';
+    } else {
+      root.style.fontSize = '16px';
+    }
+    localStorage.setItem("appFontSize", appFontSize);
+  }, [appFontSize]);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const showSecurityStatus = (msg: string, type: 'success' | 'error') => {
+    setSecurityStatusMsg(msg);
+    setSecurityStatusType(type);
+    setTimeout(() => setSecurityStatusMsg(null), 4000);
+  };
+
+  const handleUpdateSecurity = async () => {
+    if (!currentPassword && !newPassword) return;
+    if (!currentPassword) { showSecurityStatus("Please enter your current password.", "error"); return; }
+    if (!newPassword) { showSecurityStatus("Please enter a new password.", "error"); return; }
+    if (currentPassword === newPassword) { showSecurityStatus("New password cannot be the same as the current password.", "error"); return; }
+    const pwdRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!pwdRegex.test(newPassword)) { showSecurityStatus("New password must be at least 8 characters and contain an uppercase letter, a lowercase letter, and a number.", "error"); return; }
+
+    setIsUpdatingSecurity(true);
+    try {
+      const token = localStorage.getItem('insightai_token');
+      const res = await axios.put('http://localhost:8000/api/auth/update-password', {
+        current_password: currentPassword,
+        new_password: newPassword
+      }, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      if (res.data.success) {
+        setCurrentPassword('');
+        setNewPassword('');
+        setShowCurrentPass(false);
+        setShowNewPass(false);
+        showSecurityStatus("Password updated successfully.", "success");
+      } else {
+        showSecurityStatus(res.data.message || "Failed to update password.", "error");
+      }
+    } catch (err: any) {
+      showSecurityStatus(err.response?.data?.message || "An error occurred while updating the password.", "error");
+    }
+    setIsUpdatingSecurity(false);
+  };
+
+  const handleSaveApiKey = () => {
+    if (!customApiKey.trim()) {
+      setApiKeyStatusMsg("Please enter an API key to save.");
+      setApiKeyStatusType("error");
+      setTimeout(() => setApiKeyStatusMsg(null), 4000);
+      return;
+    }
+    localStorage.setItem("custom_openrouter_api_key", customApiKey);
+    setApiKeyStatusMsg("API key saved successfully.");
+    setApiKeyStatusType("success");
+    setTimeout(() => setApiKeyStatusMsg(null), 4000);
+  };
 
   const handleSchemaSearch = async (val: string) => {
     setSchemaSearchQuery(val);
@@ -712,7 +789,7 @@ export default function App() {
                             <span className="text-[9px] px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20 text-indigo-500 dark:text-indigo-400 font-bold uppercase tracking-wider">Metrics</span>
                           </div>
                           <div className="flex-1 min-h-[460px] relative">
-                            <ChartViewer config={c.config} />
+                            <ChartViewer config={c.config} isDarkMode={isDarkMode} />
                           </div>
                         </div>
                       ))}
@@ -1526,7 +1603,7 @@ export default function App() {
 
                         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/10 border border-slate-200 dark:border-slate-900/80 shadow-md">
                           <div className="min-h-[460px] relative">
-                            <ChartViewer config={forecastResult.chart_config} />
+                            <ChartViewer config={forecastResult.chart_config} isDarkMode={isDarkMode} />
                           </div>
                         </div>
 
@@ -1573,12 +1650,12 @@ export default function App() {
 
           {/* ════════ TAB: SETTINGS ════════ */}
           {activeNavTab === 'settings' && (
-            <div className="h-full overflow-y-auto p-6 space-y-6 custom-scrollbar animate-fade-in">
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Settings</h3>
-                <p className="text-xs text-slate-400 dark:text-slate-500">Manage your account, preferences, and platform configuration.</p>
+            <div className="h-full overflow-y-auto px-6 lg:px-10 py-8 space-y-8 w-full custom-scrollbar animate-fade-in">
+              <div className="space-y-2">
+                <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Settings</h3>
+                <p className="text-sm font-light text-slate-500 dark:text-slate-400">Manage your account, preferences, and platform configuration.</p>
               </div>
-              <div className="space-y-3 max-w-3xl">
+              <div className="space-y-4 w-full">
                 {[
                   { icon: User,        label: 'Profile',        desc: 'Manage account details and preferences', action: () => setProfileExpanded(prev => !prev) },
                   { icon: Activity,    label: 'System Logs & Observability', desc: 'View live agent execution logs and metrics', action: () => setLogsExpanded(prev => !prev) },
@@ -1588,21 +1665,21 @@ export default function App() {
                   { icon: Sparkles,    label: 'Appearance',     desc: 'Theme, font size, and layout', action: () => setAppearanceExpanded(prev => !prev) },
                   { icon: StorageIcon, label: 'Data & Storage', desc: 'Storage usage and data retention', action: () => setStorageExpanded(prev => !prev) },
                 ].map(({ icon: Icon, label, desc, action }) => (
-                  <div key={label} className="space-y-3">
+                  <div key={label} className="flex flex-col space-y-3 w-full">
                     <div
                       onClick={action}
-                      className="p-4 rounded-2xl bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-900/80 hover:bg-slate-50 dark:hover:bg-slate-900/40 flex items-center justify-between cursor-pointer transition-colors duration-150"
+                      className="w-full p-4 lg:p-5 rounded-2xl bg-white dark:bg-slate-900/20 border border-slate-200 dark:border-slate-900/80 hover:bg-slate-50 dark:hover:bg-slate-900/40 hover:-translate-y-0.5 hover:shadow-lg dark:hover:shadow-indigo-500/10 flex items-center justify-between cursor-pointer transition-all duration-200"
                     >
                       <div className="flex items-center gap-4">
-                        <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/40 flex items-center justify-center text-indigo-500 dark:text-indigo-400">
-                          <Icon size={15} />
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/40 flex items-center justify-center text-indigo-500 dark:text-indigo-400 shrink-0">
+                          <Icon size={18} />
                         </div>
                         <div>
-                          <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-200">{label}</h4>
-                          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{desc}</p>
+                          <h4 className="text-sm font-bold text-slate-700 dark:text-slate-200">{label}</h4>
+                          <p className="text-xs font-light text-slate-400 dark:text-slate-500 mt-0.5">{desc}</p>
                         </div>
                       </div>
-                      <ChevronRight size={14} className={`text-slate-350 dark:text-slate-655 transition-transform ${
+                      <ChevronRight size={16} className={`text-slate-400 dark:text-slate-500 shrink-0 transition-transform ${
                         (label === 'Profile' && profileExpanded) || 
                         (label === 'System Logs & Observability' && logsExpanded) ||
                         (label === 'Model Evaluation & Evals Suite' && evalsExpanded)
@@ -1795,60 +1872,123 @@ export default function App() {
 
                     {label === 'Security' && securityExpanded && (
                       <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900/10 border border-slate-200 dark:border-slate-800 space-y-4 animate-fade-in text-slate-700 dark:text-slate-350">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1.5">
-                            <label className="block text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Change Password</label>
+                        {/* ── Password Change ── */}
+                        <div className="space-y-2">
+                          <label className="block text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Current Password</label>
+                          <div className="relative">
                             <input
-                              type="password"
-                              placeholder="Current Password"
+                              type={showCurrentPass ? "text" : "password"}
+                              placeholder="Enter current password"
                               value={currentPassword}
                               onChange={e => setCurrentPassword(e.target.value)}
-                              className="w-full text-[10px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 focus:outline-none"
+                              className="w-full text-[10px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-2 pr-8 focus:outline-none focus:border-indigo-500/50"
                             />
-                            <input
-                              type="password"
-                              placeholder="New Password"
-                              value={newPassword}
-                              onChange={e => setNewPassword(e.target.value)}
-                              className="w-full text-[10px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 focus:outline-none"
-                            />
+                            <button type="button" onClick={() => setShowCurrentPass(p => !p)}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-500 dark:text-slate-500 dark:hover:text-slate-400">
+                              {showCurrentPass ? <EyeOff size={12} /> : <Eye size={12} />}
+                            </button>
                           </div>
 
-                          <div className="space-y-1.5">
-                            <label className="block text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">OpenRouter API Override</label>
-                            <div className="flex gap-2">
-                              <input
-                                type={showApiKey ? "text" : "password"}
-                                placeholder="sk-or-v1-..."
-                                value={customApiKey}
-                                onChange={e => setCustomApiKey(e.target.value)}
-                                className="flex-1 text-[10px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 focus:outline-none font-mono"
-                              />
-                              <button
-                                onClick={() => setShowApiKey(p => !p)}
-                                className="px-2.5 py-1.5 bg-slate-250 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-[9px] font-bold"
-                              >
-                                {showApiKey ? "Hide" : "Show"}
-                              </button>
-                            </div>
-                            <span className="block text-[8px] text-slate-400 dark:text-slate-500 italic mt-1 leading-normal">
-                              Providing a key overrides the system's default OpenRouter token for your workspace.
-                            </span>
+                          <label className="block text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider mt-1">New Password</label>
+                          <div className="relative">
+                            <input
+                              type={showNewPass ? "text" : "password"}
+                              placeholder="Enter new password"
+                              value={newPassword}
+                              onChange={e => setNewPassword(e.target.value)}
+                              className="w-full text-[10px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-2 pr-8 focus:outline-none focus:border-indigo-500/50"
+                            />
+                            <button type="button" onClick={() => setShowNewPass(p => !p)}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-500 dark:text-slate-500 dark:hover:text-slate-400">
+                              {showNewPass ? <EyeOff size={12} /> : <Eye size={12} />}
+                            </button>
                           </div>
                         </div>
+
+                        {securityStatusMsg && (
+                          <div className={`text-[10px] font-bold p-2.5 rounded-lg flex items-center gap-2 animate-fade-in ${
+                            securityStatusType === 'success' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                          }`}>
+                            {securityStatusType === 'success' ? <CheckCircle size={14} /> : <X size={14} />}
+                            <span>{securityStatusMsg}</span>
+                          </div>
+                        )}
+
                         <button
-                          onClick={() => {
-                            if (customApiKey) {
-                              localStorage.setItem("custom_openrouter_api_key", customApiKey);
-                              alert("Custom OpenRouter API Key configured successfully.");
-                            } else {
-                              alert("Security settings saved successfully.");
-                            }
-                          }}
-                          className="py-1 px-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg text-[9px] transition-colors cursor-pointer"
+                          onClick={handleUpdateSecurity}
+                          disabled={isUpdatingSecurity}
+                          className="flex items-center justify-center gap-2 py-1.5 px-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg text-[9px] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Update Security Credentials
+                          {isUpdatingSecurity ? (
+                            <>
+                              <div className="w-2.5 h-2.5 border border-white border-t-transparent rounded-full animate-spin" />
+                              <span>Updating...</span>
+                            </>
+                          ) : (
+                            "Update Security Credentials"
+                          )}
                         </button>
+
+                        {/* ── Advanced Settings Accordion ── */}
+                        <div className="border-t border-slate-200 dark:border-slate-800/60 pt-3">
+                          <button
+                            type="button"
+                            onClick={() => setAdvancedSettingsExpanded(p => !p)}
+                            className="flex items-center justify-between w-full text-left group"
+                          >
+                            <div className="flex items-center gap-2">
+                              <ChevronRight size={13} className={`text-slate-400 dark:text-slate-500 transition-transform duration-200 ${advancedSettingsExpanded ? 'rotate-90' : ''}`} />
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-400 transition-colors">Advanced Settings</span>
+                            </div>
+                            {!advancedSettingsExpanded && (
+                              <span className="text-[8px] text-slate-400 dark:text-slate-600 italic">Click to expand</span>
+                            )}
+                          </button>
+
+                          {advancedSettingsExpanded && (
+                            <div className="mt-3 space-y-3 animate-fade-in">
+                              <div className="space-y-1.5">
+                                <label className="block text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Personal OpenRouter API Key <span className="normal-case text-slate-400/60">(Optional)</span></label>
+                                <div className="flex gap-2">
+                                  <input
+                                    type={showApiKey ? "text" : "password"}
+                                    placeholder="sk-or-v1-..."
+                                    value={customApiKey}
+                                    onChange={e => setCustomApiKey(e.target.value)}
+                                    className="flex-1 text-[10px] bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-indigo-500/50 font-mono"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowApiKey(p => !p)}
+                                    className="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[9px] font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                  >
+                                    {showApiKey ? "Hide" : "Show"}
+                                  </button>
+                                </div>
+                                <p className="text-[8px] text-slate-400 dark:text-slate-500 italic leading-relaxed">
+                                  Leave this field empty to use the system's default AI key. Enter your own OpenRouter API key only if you want the application to use your personal OpenRouter account.
+                                </p>
+                              </div>
+
+                              {apiKeyStatusMsg && (
+                                <div className={`text-[10px] font-bold p-2.5 rounded-lg flex items-center gap-2 animate-fade-in ${
+                                  apiKeyStatusType === 'success' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                                }`}>
+                                  {apiKeyStatusType === 'success' ? <CheckCircle size={14} /> : <X size={14} />}
+                                  <span>{apiKeyStatusMsg}</span>
+                                </div>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={handleSaveApiKey}
+                                className="py-1.5 px-3 border border-indigo-500/30 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-500/5 font-semibold rounded-lg text-[9px] transition-colors cursor-pointer"
+                              >
+                                Save API Key
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -1889,7 +2029,7 @@ export default function App() {
                                   key={sz}
                                   onClick={() => {
                                     setAppFontSize(sz);
-                                    alert(`App text scale set to: ${sz}`);
+                                    showToast(`✓ Text size updated`);
                                   }}
                                   className={`flex-1 py-2 px-1.5 border rounded-xl text-center text-[9px] font-bold capitalize transition-all ${
                                     appFontSize === sz
@@ -1989,6 +2129,13 @@ export default function App() {
 
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 bg-slate-800 text-white px-4 py-2.5 rounded-lg shadow-xl text-sm font-medium animate-fade-in z-50 flex items-center gap-2 border border-slate-700">
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 }
