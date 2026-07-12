@@ -190,7 +190,50 @@ Create a `.env` file in the `backend/` directory:
 # backend/.env
 OPENROUTER_API_KEY=your_openrouter_or_openai_api_key
 ```
+---
+## 🐳 Docker Deployment
 
+InsightAI supports Docker deployment for both the frontend and backend.
+
+### Prerequisites
+
+- Docker Desktop
+- Docker Compose
+
+### Build and Run
+
+```bash
+docker-compose up --build
+```
+
+### Access the Application
+
+Frontend:
+http://localhost:3000
+
+Backend:
+http://localhost:8000
+
+### Stop the Containers
+
+```bash
+docker-compose down
+```
+
+### Project Docker Architecture
+
+```
+Frontend (React + Nginx)
+        │
+        ▼
+FastAPI Backend
+        │
+        ▼
+SQLite Database
+        │
+        ▼
+OpenRouter API
+```
 ---
 
 ## 🖥️ Running the Project
@@ -241,6 +284,29 @@ The client will start at `http://localhost:5173`.
 *   **Vector Semantic Search:** Embeddings-based query classification.
 *   **Streaming Responses:** Real-time token streaming for LLM answers.
 *   **Offline Evaluation Benchmark:** Automated accuracy and latency tracing metrics.
+
+---
+
+## ☁️ Deployment
+
+The project is deployment-ready.
+
+Recommended deployment architecture:
+
+| Component | Platform |
+|-----------|----------|
+| Frontend | Vercel |
+| Backend | Render |
+| Source Code | GitHub |
+| Container Support | Docker |
+
+Deployment URLs:
+
+Frontend:
+Coming Soon
+
+Backend:
+Coming Soon
 
 ---
 
