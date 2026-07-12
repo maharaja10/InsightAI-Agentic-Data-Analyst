@@ -15,6 +15,7 @@ InsightAI doesn't just execute predefined queries; it actively reasons over your
 ## 📊 Sample Dataset Drive Links
 
 https://drive.google.com/drive/folders/1KUEW6C8oeEcsxKsEW4ZUtrXlFCrF6hPU?usp=sharing
+
 ---
 
 ## 📷 Screenshots Drive Link
@@ -26,6 +27,8 @@ https://drive.google.com/drive/folders/1wOKz7cAhz4Hi0I684S2ZAqkYKVdfE5Ja?usp=sha
 ## 🎥 Demo Video Drive
 
 https://drive.google.com/drive/folders/1wwJoFq0EZ6xwjAJFVDNnzBCgNQnrd-Nm?usp=sharing
+
+---
 
 ## 🔍 Complete Project Description
 
@@ -152,27 +155,42 @@ sequenceDiagram
 
 ---
 
+### DevOps & Deployment
+
+- Docker
+- Docker Compose
+- Nginx
+- GitHub
+
+---
+
 ## 📂 Folder Structure
 
 ```
-raja_DBO/
+
+InsightAI-Agentic-Data-Analyst/
 ├── backend/
+│   ├── Dockerfile          # Docker configuration for the FastAPI backend service
 │   ├── agents/             # LangGraph agent definitions (Supervisor, SQL, Pandas, etc.)
 │   ├── api/                # FastAPI routing controllers (auth, chat, forecast, quality, dashboard)
 │   ├── db/                 # SQLite database config and SQLAlchemy schemas
 │   ├── graphs/             # Workflow graphs for multi-agent execution
 │   ├── uploads/            # Scoped user CSV directory structure
-│   ├── main.py             # Main entry point (FastAPI server mount)
+│   ├── main.py             # Main entry point (FastAPI server)
 │   └── requirements.txt    # Python package dependencies
+│
 ├── frontend/
+│   ├── Dockerfile          # Docker configuration for the React + Nginx frontend
 │   ├── src/
 │   │   ├── components/     # Reusable React components (ChatWindow, ChartViewer, etc.)
-│   │   ├── context/        # React Auth Context state management
-│   │   ├── pages/          # Layout pages (AuthPage, App tabs)
-│   │   ├── App.tsx         # Main router layout & tabs render
-│   │   └── main.tsx        # React client entry point
-│   ├── package.json        # Frontend NPM script definitions
-│   └── vite.config.ts      # Vite configuration
+│   │   ├── context/        # React authentication context and state management
+│   │   ├── pages/          # Application pages (AuthPage, Dashboard, Settings, etc.)
+│   │   ├── App.tsx         # Main application layout and routing
+│   │   └── main.tsx        # React application entry point
+│   ├── package.json        # Frontend dependencies and scripts
+│   └── vite.config.ts      # Vite build configuration
+│
+├── docker-compose.yml      # Orchestrates frontend and backend Docker containers
 └── README.md               # Project documentation
 ```
 
@@ -181,19 +199,80 @@ raja_DBO/
 ## ⚙️ Installation & Setup
 
 ### Prerequisites
-*   Python 3.10+
-*   Node.js 18+ & NPM
+
+- Python 3.10+
+- Node.js 18+ & NPM
+- Docker Desktop *(Optional - for Docker deployment)*
+
+---
 
 ### Environment Configuration
-Create a `.env` file in the `backend/` directory:
+
+Create a `.env` file inside the `backend/` directory.
+
 ```env
 # backend/.env
-OPENROUTER_API_KEY=your_openrouter_or_openai_api_key
+
+OPENROUTER_API_KEY=your_openrouter_api_key
+SECRET_KEY=your_secret_key
 ```
+
+| Variable | Description |
+|----------|-------------|
+| `OPENROUTER_API_KEY` | API key used to access OpenRouter AI models. |
+| `SECRET_KEY` | Secret key used for JWT authentication and application security. |
+
 ---
+
+## 🖥️ Local Development Setup
+
+### Start the Backend
+
+```bash
+cd backend
+
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+
+# Linux / macOS
+source .venv/bin/activate
+
+pip install -r requirements.txt
+
+uvicorn main:app --reload
+```
+
+Backend URL:
+
+```
+http://localhost:8000
+```
+
+---
+
+### Start the Frontend
+
+```bash
+cd frontend
+
+npm install
+
+npm run dev
+```
+
+Frontend URL:
+
+```
+http://localhost:5173
+```
+
+---
+
 ## 🐳 Docker Deployment
 
-InsightAI supports Docker deployment for both the frontend and backend.
+InsightAI supports containerized deployment using **Docker** and **Docker Compose**.
 
 ### Prerequisites
 
@@ -208,11 +287,10 @@ docker-compose up --build
 
 ### Access the Application
 
-Frontend:
-http://localhost:3000
-
-Backend:
-http://localhost:8000
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| Backend | http://localhost:8000 |
 
 ### Stop the Containers
 
@@ -223,17 +301,21 @@ docker-compose down
 ### Project Docker Architecture
 
 ```
-Frontend (React + Nginx)
-        │
-        ▼
-FastAPI Backend
-        │
-        ▼
-SQLite Database
-        │
-        ▼
-OpenRouter API
+                User
+                  │
+                  ▼
+     React + Nginx (Docker)
+                  │
+                  ▼
+       FastAPI Backend (Docker)
+                  │
+                  ▼
+           SQLite Database
+                  │
+                  ▼
+          OpenRouter API
 ```
+
 ---
 
 ## 🖥️ Running the Project
