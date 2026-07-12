@@ -69,7 +69,7 @@ export default function App() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+
   const [showCurrentPass, setShowCurrentPass] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
   const [isUpdatingSecurity, setIsUpdatingSecurity] = useState(false);
