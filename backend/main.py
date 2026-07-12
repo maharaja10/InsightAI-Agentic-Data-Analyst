@@ -25,7 +25,10 @@ app = FastAPI(title="InsightAI — Agentic Data Analyst API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",  # Local development
+        "https://insight-ai-agentic-data-analyst.vercel.app",  # Production Frontend
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
