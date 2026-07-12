@@ -1,5 +1,13 @@
 # InsightAI — Agentic Data Analyst
 
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green)
+![React](https://img.shields.io/badge/React-18-blue)
+![Vite](https://img.shields.io/badge/Vite-Frontend-purple)
+![Docker](https://img.shields.io/badge/Docker-Containerized-blue)
+![Render](https://img.shields.io/badge/Backend-Render-success)
+![Vercel](https://img.shields.io/badge/Frontend-Vercel-black)
+
 **InsightAI** is a state-of-the-art, full-stack agentic data analysis application that turns raw CSV datasets into interactive business intelligence. Powered by an advanced multi-agent system, users can upload multiple datasets, check data quality diagnostics, execute predictive statistical forecasts, and query their data using natural language.
 
 ---
@@ -9,6 +17,22 @@
 Data is the lifeblood of modern enterprise decision-making, yet extracting immediate value from raw datasets typically requires specialised skills in Python, SQL, and business intelligence (BI) tools. **InsightAI** bridges this gap by offering a fully autonomous, conversational data analyst workspace. 
 
 InsightAI doesn't just execute predefined queries; it actively reasons over your dataset's schema. By distributing analytical workloads across a specialised network of cooperative AI agents, the platform is capable of answering complex quantitative questions, plotting multi-variable graphs, detecting mathematical anomalies, and auditing dataset health. It is designed to act as an on-demand junior data scientist for business analysts and product teams.
+
+---
+
+# 🌐 Live Demo
+
+### 🚀 Frontend (Vercel)
+
+https://insight-ai-agentic-data-analyst.vercel.app
+
+### ⚙️ Backend API (Render)
+
+https://insightai-agentic-data-analyst.onrender.com
+
+### 📚 Swagger API Documentation
+
+https://insightai-agentic-data-analyst.onrender.com/docs
 
 ---
 
@@ -161,6 +185,8 @@ sequenceDiagram
 - Docker Compose
 - Nginx
 - GitHub
+- Render
+- Vercel
 
 ---
 
@@ -193,6 +219,21 @@ InsightAI-Agentic-Data-Analyst/
 ├── docker-compose.yml      # Orchestrates frontend and backend Docker containers
 └── README.md               # Project documentation
 ```
+
+---
+
+## 🚀 Quick Start
+
+### Live Application
+
+Frontend:
+https://insight-ai-agentic-data-analyst.vercel.app
+
+Backend:
+https://insightai-agentic-data-analyst.onrender.com
+
+Swagger:
+https://insightai-agentic-data-analyst.onrender.com/docs
 
 ---
 
@@ -371,24 +412,48 @@ The client will start at `http://localhost:5173`.
 
 ## ☁️ Deployment
 
-The project is deployment-ready.
+The project is fully deployed and production-ready.
 
-Recommended deployment architecture:
+| Component | Platform | URL |
+|-----------|----------|-----|
+| Frontend | Vercel | https://insight-ai-agentic-data-analyst.vercel.app |
+| Backend API | Render | https://insightai-agentic-data-analyst.onrender.com |
+| API Documentation | Render | https://insightai-agentic-data-analyst.onrender.com/docs |
+| Source Code | GitHub | https://github.com/maharaja10/InsightAI-Agentic-Data-Analyst |
 
-| Component | Platform |
-|-----------|----------|
-| Frontend | Vercel |
-| Backend | Render |
-| Source Code | GitHub |
-| Container Support | Docker |
+---
 
-Deployment URLs:
+### Production Architecture
 
-Frontend:
-Coming Soon
+```
+                User
+                  │
+                  ▼
+     Vercel (React + Vite)
+                  │
+                  ▼
+    Render (FastAPI + Docker)
+                  │
+                  ▼
+         SQLite Database
+                  │
+                  ▼
+        OpenRouter AI Models
+```
 
-Backend:
-Coming Soon
+---
+
+## ✅ Project Status
+
+- ✅ Multi-Agent AI System Completed
+- ✅ Authentication System Completed
+- ✅ Data Quality Analysis Completed
+- ✅ Forecasting Module Completed
+- ✅ Dashboard Analytics Completed
+- ✅ Dockerized Application
+- ✅ Backend Deployed on Render
+- ✅ Frontend Deployed on Vercel
+- ✅ Production Ready
 
 ---
 
