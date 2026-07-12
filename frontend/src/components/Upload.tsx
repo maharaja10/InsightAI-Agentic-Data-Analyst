@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import axios from 'axios';
 import { UploadCloud, CheckCircle, Loader2, FileSpreadsheet, X } from 'lucide-react';
+import API_BASE_URL from '../utils/api';
 
 interface UploadProps {
   onUploadSuccess: (filename: string) => void;
@@ -23,7 +24,7 @@ export default function Upload({ onUploadSuccess }: UploadProps) {
 
     try {
       setUploadProgress(50);
-      const response = await axios.post('http://localhost:8000/api/upload/', formData, {
+      const response = await axios.post(`${API_BASE_URL}/api/upload/`, formData, {
         headers:          { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: pe => {
           if (pe.total) setUploadProgress(Math.round((pe.loaded / pe.total) * 80) + 10);

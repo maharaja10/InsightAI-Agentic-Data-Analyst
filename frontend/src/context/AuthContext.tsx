@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import axios from 'axios';
+import API_BASE_URL from '../utils/api';
 
-const API = 'http://localhost:8000';
+const API = API_BASE_URL;
 
 export interface AuthUser {
   id:           number;

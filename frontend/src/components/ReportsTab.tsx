@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import axios from 'axios';
+import API_BASE_URL from '../utils/api';
 import {
   FileText, Download, BarChart2, MessageSquare, Sparkles,
   Database, Code, AlertTriangle, Lightbulb, Clock, Filter,
@@ -99,7 +100,7 @@ export default function ReportsTab({ sessions, datasets }: ReportsTabProps) {
     }
 
     setLoading(true);
-    axios.get(`http://localhost:8000/api/sessions/${selectedSessionKey}`)
+    axios.get(`${API_BASE_URL}/api/sessions/${selectedSessionKey}`)
       .then(res => {
         const dbMessages = res.data.messages || [];
         const msgs = dbMessages.map((m: any) => ({

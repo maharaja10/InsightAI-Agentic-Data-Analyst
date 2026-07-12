@@ -1,4 +1,5 @@
 import axios from 'axios';
+import API_BASE_URL from '../utils/api';
 import {
   Bot, Code, Database, Lightbulb, Loader2, Send, User,
   BarChart2, AlertTriangle, Cpu, Sparkles, ChevronDown, ChevronUp,
@@ -94,7 +95,7 @@ export default function ChatWindow({
       return;
     }
 
-    axios.get(`http://localhost:8000/api/sessions/${sessionId}`)
+    axios.get(`${API_BASE_URL}/api/sessions/${sessionId}`)
       .then(res => {
         const dbMessages = res.data.messages || [];
         const historyMap: Record<string, Message[]> = {
@@ -166,7 +167,7 @@ export default function ChatWindow({
 
     try {
       const token = localStorage.getItem('insightai_token');
-      const response = await fetch('http://localhost:8000/api/chat/', {
+      const response = await fetch(`${API_BASE_URL}/api/chat/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

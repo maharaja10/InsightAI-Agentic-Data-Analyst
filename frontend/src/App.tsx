@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import API_BASE_URL from './utils/api';
 import Upload from './components/Upload';
 import ChatWindow from './components/ChatWindow';
 import ReportsTab from './components/ReportsTab';
@@ -117,7 +118,7 @@ export default function App() {
     setIsUpdatingSecurity(true);
     try {
       const token = localStorage.getItem('insightai_token');
-      const res = await axios.put('http://localhost:8000/api/auth/update-password', {
+      const res = await axios.put(`${API_BASE_URL}/api/auth/update-password`, {
         current_password: currentPassword,
         new_password: newPassword
       }, {
@@ -160,7 +161,7 @@ export default function App() {
     setIsSearchingSchemas(true);
     try {
       const token = localStorage.getItem('insightai_token');
-      const res = await axios.post('http://localhost:8000/api/upload/search', {
+      const res = await axios.post(`${API_BASE_URL}/api/upload/search`, {
         query: val
       }, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
@@ -177,7 +178,7 @@ export default function App() {
     if (!user || activeNavTab !== 'dashboard') return;
     
     setDashboardLoading(true);
-    axios.get('http://localhost:8000/api/dashboard/stats/')
+    axios.get(`${API_BASE_URL}/api/dashboard/stats/`)
     .then(res => {
       setDashboardData(res.data);
     })
@@ -194,7 +195,7 @@ export default function App() {
 
     const fetchLogs = () => {
       const token = localStorage.getItem('insightai_token');
-      axios.get('http://localhost:8000/api/dashboard/logs/', {
+      axios.get(`${API_BASE_URL}/api/dashboard/logs/`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       })
       .then(res => {
@@ -212,7 +213,7 @@ export default function App() {
 
   const fetchEvalsReport = () => {
     const token = localStorage.getItem('insightai_token');
-    axios.get('http://localhost:8000/api/dashboard/evals/', {
+    axios.get(`${API_BASE_URL}/api/dashboard/evals/`, {
       headers: token ? { 'Authorization': `Bearer ${token}` } : {}
     })
     .then(res => {
@@ -231,13 +232,13 @@ export default function App() {
   const handleRunEvals = () => {
     setEvalsLoading(true);
     const token = localStorage.getItem('insightai_token');
-    axios.post('http://localhost:8000/api/dashboard/evals/run', {}, {
+    axios.post(`${API_BASE_URL}/api/dashboard/evals/run`, {}, {
       headers: token ? { 'Authorization': `Bearer ${token}` } : {}
     })
     .then(() => {
       let attempts = 0;
       const interval = setInterval(() => {
-        axios.get('http://localhost:8000/api/dashboard/evals/', {
+        axios.get(`${API_BASE_URL}/api/dashboard/evals/`, {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {}
         })
         .then(res => {
@@ -279,7 +280,7 @@ export default function App() {
     if (!user || activeNavTab !== 'quality' || !selectedQualityFile) return;
 
     setQualityLoading(true);
-    axios.get(`http://localhost:8000/api/quality/${selectedQualityFile}`)
+    axios.get(`${API_BASE_URL}/api/quality/${selectedQualityFile}`)
     .then(res => {
       setQualityReport(res.data);
     })
@@ -315,7 +316,7 @@ export default function App() {
 
   useEffect(() => {
     if (!user || !selectedForecastFile) return;
-    axios.get(`http://localhost:8000/api/quality/${selectedForecastFile}`)
+    axios.get(`${API_BASE_URL}/api/quality/${selectedForecastFile}`)
     .then(res => {
       if (res.data && res.data.columns) {
         setForecastCols(res.data.columns);
@@ -334,7 +335,7 @@ export default function App() {
   const handleRunForecast = () => {
     if (!selectedForecastFile || !forecastDateCol || !forecastValCol) return;
     setForecastLoading(true);
-    axios.post('http://localhost:8000/api/forecast/', {
+    axios.post(`${API_BASE_URL}/api/forecast/`, {
       filename: selectedForecastFile,
       date_col: forecastDateCol,
       value_col: forecastValCol,
@@ -378,7 +379,7 @@ export default function App() {
   // Restore datasets and sessions from API after login
   useEffect(() => {
     if (!user) return;
-    axios.get('http://localhost:8000/api/upload/list')
+    axios.get(`${API_BASE_URL}/api/upload/list`)
       .then(res => {
         const names: string[] = res.data.map((d: any) => d.filename);
         setDatasets(names);
@@ -388,7 +389,7 @@ export default function App() {
       })
       .catch(() => {}); // silently ignore if endpoint fails
 
-    axios.get('http://localhost:8000/api/sessions/')
+    axios.get(`${API_BASE_URL}/api/sessions/`)
       .then(res => {
         const loaded = res.data;
         setSessions(loaded);
@@ -406,7 +407,7 @@ export default function App() {
     const newKey = `session_${Math.random().toString(36).substr(2, 9)}`;
     const newName = customName || `Chat Session ${currentSessions.length + 1}`;
     try {
-      const res = await axios.post('http://localhost:8000/api/sessions/', {
+      const res = await axios.post(`${API_BASE_URL}/api/sessions/`, {
         session_key: newKey,
         session_name: newName,
         active_dataset: selectedDatasets.join(','),
@@ -422,7 +423,7 @@ export default function App() {
   const deleteSession = async (sessionKey: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await axios.delete(`http://localhost:8000/api/sessions/${sessionKey}`);
+      await axios.delete(`${API_BASE_URL}/api/sessions/${sessionKey}`);
       setSessions(prev => {
         const filtered = prev.filter(s => s.session_key !== sessionKey);
         if (activeSessionKey === sessionKey) {
@@ -453,7 +454,7 @@ export default function App() {
     
     if (activeSessionKey) {
       try {
-        const res = await axios.post('http://localhost:8000/api/sessions/', {
+        const res = await axios.post(`${API_BASE_URL}/api/sessions/`, {
           session_key: activeSessionKey,
           active_dataset: updated.join(','),
           agent_mode: activeAgentMode,
@@ -2066,7 +2067,7 @@ export default function App() {
                               onClick={() => {
                                 if (window.confirm("Are you sure you want to clear your query cache? This will force the LLM to execute new query analysis runs.")) {
                                   const token = localStorage.getItem('insightai_token');
-                                  axios.post('http://localhost:8000/api/dashboard/cache/clear', {}, {
+                                  axios.post(`${API_BASE_URL}/api/dashboard/cache/clear`, {}, {
                                     headers: token ? { 'Authorization': `Bearer ${token}` } : {}
                                   })
                                   .then(() => alert("Semantic query cache cleared successfully."))
